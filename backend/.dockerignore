@@ -1,0 +1,6 @@
+.env
+bin/
+coverage.out
+Dockerfile
+README.md
+

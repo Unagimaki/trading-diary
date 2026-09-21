@@ -1,0 +1,7 @@
+.env
+node_modules/
+dist/
+coverage/
+Dockerfile
+npm-debug.log*
+
