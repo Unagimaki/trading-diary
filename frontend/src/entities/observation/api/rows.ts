@@ -1,0 +1,3 @@
+import { apiRequest } from '@/shared/api/http'
+export type ObservationRow={id:string;journalId:string;position:number;values:Record<string,unknown>;createdAt:string;updatedAt:string}
+export const rowsApi={list:(journalId:string)=>apiRequest<ObservationRow[]>(`/journals/${journalId}/rows`),create:(journalId:string)=>apiRequest<ObservationRow>(`/journals/${journalId}/rows`,{method:'POST'}),remove:(journalId:string,rowId:string)=>apiRequest<void>(`/journals/${journalId}/rows/${rowId}`,{method:'DELETE'}),setCell:(journalId:string,rowId:string,columnId:string,value:unknown)=>apiRequest<void>(`/journals/${journalId}/rows/${rowId}/cells/${columnId}`,{method:'PATCH',body:JSON.stringify({value})})}

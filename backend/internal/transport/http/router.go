@@ -8,9 +8,10 @@ import (
 	"github.com/trade-diary/backend/internal/domain/auth"
 	"github.com/trade-diary/backend/internal/domain/column"
 	"github.com/trade-diary/backend/internal/domain/journal"
+	"github.com/trade-diary/backend/internal/domain/observation"
 )
 
-func NewRouter(frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service) http.Handler {
+func NewRouter(frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service, observationService *observation.Service) http.Handler {
 	router := mux.NewRouter()
 	router.Use(cors(frontendOrigin))
 	router.HandleFunc("/health", health).Methods(http.MethodGet)
@@ -30,6 +31,12 @@ func NewRouter(frontendOrigin string, authService *auth.Service, journalService 
 	router.HandleFunc("/journals/{journalID}/columns", columns.create).Methods(http.MethodPost)
 	router.HandleFunc("/journals/{journalID}/columns/{id}", columns.update).Methods(http.MethodPatch)
 	router.HandleFunc("/journals/{journalID}/columns/{id}", columns.delete).Methods(http.MethodDelete)
+	rows := observationHandler{auth: authService, rows: observationService}
+	router.HandleFunc("/journals/{journalID}/rows", rows.list).Methods(http.MethodGet)
+	router.HandleFunc("/journals/{journalID}/rows", rows.create).Methods(http.MethodPost)
+	router.HandleFunc("/journals/{journalID}/rows/{rowID}", rows.delete).Methods(http.MethodDelete)
+	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}", rows.setCell).Methods(http.MethodPatch)
+	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}", rows.clearCell).Methods(http.MethodDelete)
 
 	return router
 }

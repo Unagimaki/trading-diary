@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -100,7 +101,9 @@ func hashToken(token string) string {
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if json.NewDecoder(r.Body).Decode(v) != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(v) != nil || decoder.Decode(&struct{}{}) != io.EOF {
 		writeError(w, 400, "invalid request")
 		return false
 	}

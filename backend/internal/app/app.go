@@ -12,6 +12,7 @@ import (
 	"github.com/trade-diary/backend/internal/domain/auth"
 	"github.com/trade-diary/backend/internal/domain/column"
 	"github.com/trade-diary/backend/internal/domain/journal"
+	"github.com/trade-diary/backend/internal/domain/observation"
 	"github.com/trade-diary/backend/internal/infrastructure/postgres"
 	httptransport "github.com/trade-diary/backend/internal/transport/http"
 )
@@ -37,10 +38,11 @@ func (a *App) Run(ctx context.Context) error {
 	authService := auth.NewService(postgres.NewAuthRepository(pool))
 	journalService := journal.NewService(postgres.NewJournalRepository(pool))
 	columnService := column.NewService(postgres.NewColumnRepository(pool))
+	observationService := observation.NewService(postgres.NewObservationRepository(pool))
 
 	server := &http.Server{
 		Addr:              a.config.HTTPAddress,
-		Handler:           httptransport.NewRouter(a.config.FrontendOrigin, authService, journalService, columnService),
+		Handler:           httptransport.NewRouter(a.config.FrontendOrigin, authService, journalService, columnService, observationService),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
