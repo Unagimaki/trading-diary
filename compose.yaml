@@ -27,14 +27,27 @@ services:
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
       interval: 10s
       timeout: 3s
       retries: 5
     restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate:v4.19.1
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://${POSTGRES_USER:-trade_diary}:${POSTGRES_PASSWORD:-trade_diary}@postgres:5432/${POSTGRES_DB:-trade_diary}?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   postgres:
     image: postgres:17-alpine

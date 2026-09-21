@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/trade-diary/backend/internal/config"
 	"github.com/trade-diary/backend/internal/domain/auth"
+	"github.com/trade-diary/backend/internal/domain/column"
+	"github.com/trade-diary/backend/internal/domain/journal"
 	"github.com/trade-diary/backend/internal/infrastructure/postgres"
 	httptransport "github.com/trade-diary/backend/internal/transport/http"
 )
@@ -32,14 +34,13 @@ func (a *App) Run(ctx context.Context) error {
 	if err := pool.Ping(ctx); err != nil {
 		return err
 	}
-	if err := postgres.Migrate(ctx, pool); err != nil {
-		return err
-	}
 	authService := auth.NewService(postgres.NewAuthRepository(pool))
+	journalService := journal.NewService(postgres.NewJournalRepository(pool))
+	columnService := column.NewService(postgres.NewColumnRepository(pool))
 
 	server := &http.Server{
 		Addr:              a.config.HTTPAddress,
-		Handler:           httptransport.NewRouter(a.config.FrontendOrigin, authService),
+		Handler:           httptransport.NewRouter(a.config.FrontendOrigin, authService, journalService, columnService),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,

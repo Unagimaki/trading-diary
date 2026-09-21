@@ -15,20 +15,6 @@ type AuthRepository struct{ pool *pgxpool.Pool }
 
 func NewAuthRepository(pool *pgxpool.Pool) *AuthRepository { return &AuthRepository{pool: pool} }
 
-func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, `
-CREATE TABLE IF NOT EXISTS users (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, email text NOT NULL UNIQUE,
- password_hash text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS sessions (
- token_hash text PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
- expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);`)
-	return err
-}
-
 func (r *AuthRepository) CreateUser(ctx context.Context, name, email, hash string) (auth.User, error) {
 	var u auth.User
 	err := r.pool.QueryRow(ctx, `INSERT INTO users(name,email,password_hash) VALUES($1,$2,$3) RETURNING id,name,email`, name, email, hash).Scan(&u.ID, &u.Name, &u.Email)

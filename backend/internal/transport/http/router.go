@@ -6,9 +6,11 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/trade-diary/backend/internal/domain/auth"
+	"github.com/trade-diary/backend/internal/domain/column"
+	"github.com/trade-diary/backend/internal/domain/journal"
 )
 
-func NewRouter(frontendOrigin string, authService *auth.Service) http.Handler {
+func NewRouter(frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service) http.Handler {
 	router := mux.NewRouter()
 	router.Use(cors(frontendOrigin))
 	router.HandleFunc("/health", health).Methods(http.MethodGet)
@@ -17,6 +19,17 @@ func NewRouter(frontendOrigin string, authService *auth.Service) http.Handler {
 	router.HandleFunc("/auth/login", handler.login).Methods(http.MethodPost)
 	router.HandleFunc("/auth/logout", handler.logout).Methods(http.MethodPost)
 	router.HandleFunc("/auth/me", handler.me).Methods(http.MethodGet)
+	journals := journalHandler{auth: authService, journals: journalService}
+	router.HandleFunc("/journals", journals.list).Methods(http.MethodGet)
+	router.HandleFunc("/journals", journals.create).Methods(http.MethodPost)
+	router.HandleFunc("/journals/{id}", journals.get).Methods(http.MethodGet)
+	router.HandleFunc("/journals/{id}", journals.rename).Methods(http.MethodPatch)
+	router.HandleFunc("/journals/{id}", journals.delete).Methods(http.MethodDelete)
+	columns := columnHandler{auth: authService, columns: columnService}
+	router.HandleFunc("/journals/{journalID}/columns", columns.list).Methods(http.MethodGet)
+	router.HandleFunc("/journals/{journalID}/columns", columns.create).Methods(http.MethodPost)
+	router.HandleFunc("/journals/{journalID}/columns/{id}", columns.update).Methods(http.MethodPatch)
+	router.HandleFunc("/journals/{journalID}/columns/{id}", columns.delete).Methods(http.MethodDelete)
 
 	return router
 }
