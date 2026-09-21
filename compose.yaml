@@ -24,6 +24,9 @@ services:
       HTTP_ADDRESS: :8080
       DATABASE_URL: postgres://${POSTGRES_USER:-trade_diary}:${POSTGRES_PASSWORD:-trade_diary}@postgres:5432/${POSTGRES_DB:-trade_diary}?sslmode=disable
       FRONTEND_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
+      UPLOAD_DIRECTORY: /data/uploads
+    volumes:
+      - uploads_data:/data/uploads
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -68,3 +71,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

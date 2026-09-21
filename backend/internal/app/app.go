@@ -9,11 +9,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/trade-diary/backend/internal/config"
+	"github.com/trade-diary/backend/internal/domain/attachment"
 	"github.com/trade-diary/backend/internal/domain/auth"
 	"github.com/trade-diary/backend/internal/domain/column"
 	"github.com/trade-diary/backend/internal/domain/journal"
 	"github.com/trade-diary/backend/internal/domain/observation"
 	"github.com/trade-diary/backend/internal/infrastructure/postgres"
+	localstorage "github.com/trade-diary/backend/internal/infrastructure/storage"
 	httptransport "github.com/trade-diary/backend/internal/transport/http"
 )
 
@@ -39,10 +41,15 @@ func (a *App) Run(ctx context.Context) error {
 	journalService := journal.NewService(postgres.NewJournalRepository(pool))
 	columnService := column.NewService(postgres.NewColumnRepository(pool))
 	observationService := observation.NewService(postgres.NewObservationRepository(pool))
+	storage, err := localstorage.NewLocal(a.config.UploadDirectory)
+	if err != nil {
+		return err
+	}
+	attachmentService := attachment.NewService(postgres.NewAttachmentRepository(pool), storage)
 
 	server := &http.Server{
 		Addr:              a.config.HTTPAddress,
-		Handler:           httptransport.NewRouter(a.config.FrontendOrigin, authService, journalService, columnService, observationService),
+		Handler:           httptransport.NewRouter(a.config.FrontendOrigin, authService, journalService, columnService, observationService, attachmentService),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,

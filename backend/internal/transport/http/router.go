@@ -5,13 +5,14 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/trade-diary/backend/internal/domain/attachment"
 	"github.com/trade-diary/backend/internal/domain/auth"
 	"github.com/trade-diary/backend/internal/domain/column"
 	"github.com/trade-diary/backend/internal/domain/journal"
 	"github.com/trade-diary/backend/internal/domain/observation"
 )
 
-func NewRouter(frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service, observationService *observation.Service) http.Handler {
+func NewRouter(frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service, observationService *observation.Service, attachmentService *attachment.Service) http.Handler {
 	router := mux.NewRouter()
 	router.Use(cors(frontendOrigin))
 	router.HandleFunc("/health", health).Methods(http.MethodGet)
@@ -37,6 +38,10 @@ func NewRouter(frontendOrigin string, authService *auth.Service, journalService 
 	router.HandleFunc("/journals/{journalID}/rows/{rowID}", rows.delete).Methods(http.MethodDelete)
 	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}", rows.setCell).Methods(http.MethodPatch)
 	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}", rows.clearCell).Methods(http.MethodDelete)
+	images := attachmentHandler{auth: authService, attachments: attachmentService}
+	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}/image", images.upload).Methods(http.MethodPost)
+	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}/image", images.delete).Methods(http.MethodDelete)
+	router.HandleFunc("/attachments/{id}/content", images.content).Methods(http.MethodGet)
 
 	return router
 }
