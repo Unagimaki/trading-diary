@@ -80,12 +80,19 @@ type TradeCounts struct {
 	Losses    int `json:"losses"`
 	Breakeven int `json:"breakeven"`
 }
+type EquityPoint struct {
+	TradeNumber int     `json:"tradeNumber"`
+	RowID       string  `json:"rowId,omitempty"`
+	Balance     float64 `json:"balance"`
+	PnL         float64 `json:"pnl"`
+}
 type Report struct {
 	ObservationCount    int                  `json:"observationCount"`
 	SelectDistributions []SelectDistribution `json:"selectDistributions"`
 	Metrics             Metrics              `json:"metrics"`
 	DataQuality         DataQuality          `json:"dataQuality"`
 	Trades              TradeCounts          `json:"trades"`
+	EquityCurve         []EquityPoint        `json:"equityCurve"`
 }
 
 type Service struct{ repo Repository }
@@ -100,7 +107,7 @@ func (s *Service) Get(ctx context.Context, userID, journalID string) (Report, er
 }
 
 func Calculate(dataset Dataset) Report {
-	report := Report{ObservationCount: dataset.ObservationCount, SelectDistributions: []SelectDistribution{}, DataQuality: DataQuality{Issues: []RowIssue{}}, Metrics: Metrics{
+	report := Report{ObservationCount: dataset.ObservationCount, SelectDistributions: []SelectDistribution{}, EquityCurve: []EquityPoint{{TradeNumber: 0, Balance: dataset.InitialDeposit}}, DataQuality: DataQuality{Issues: []RowIssue{}}, Metrics: Metrics{
 		WinRate: unavailable(ReasonRoleMissing), TotalPnL: unavailable(ReasonRoleMissing), AveragePnL: unavailable(ReasonRoleMissing), ProfitFactor: unavailable(ReasonRoleMissing), TotalR: unavailable(ReasonRoleMissing), AverageR: unavailable(ReasonRoleMissing),
 	}}
 	roles := map[string]string{}
@@ -117,6 +124,8 @@ func Calculate(dataset Dataset) Report {
 	results := []string{}
 	pnls := []float64{}
 	rs := []float64{}
+	balance := dataset.InitialDeposit
+	tradeNumber := 0
 	for _, row := range dataset.Rows {
 		riskPercent := numberValue(row.Values[roles["risk"]])
 		if riskPercent == nil && dataset.DefaultRisk > 0 {
@@ -143,12 +152,19 @@ func Calculate(dataset Dataset) Report {
 		if values.Risk != nil && *values.Risk > 0 {
 			riskAmount = dataset.InitialDeposit * *values.Risk / 100
 		}
+		var rowPnL *float64
 		if values.PnL != nil {
-			pnls = append(pnls, *values.PnL)
+			rowPnL = values.PnL
 		} else if values.Result != nil && values.R != nil && riskAmount > 0 {
 			if pnl := pnlForOutcome(*values.Result, riskAmount, *values.R); pnl != nil {
-				pnls = append(pnls, *pnl)
+				rowPnL = pnl
 			}
+		}
+		if rowPnL != nil {
+			pnls = append(pnls, *rowPnL)
+			balance += *rowPnL
+			tradeNumber++
+			report.EquityCurve = append(report.EquityCurve, EquityPoint{TradeNumber: tradeNumber, RowID: row.ID, Balance: balance, PnL: *rowPnL})
 		}
 		if values.Result != nil && values.R != nil {
 			if actualR := rForOutcome(*values.Result, *values.R); actualR != nil {

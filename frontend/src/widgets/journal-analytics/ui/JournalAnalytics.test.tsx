@@ -31,6 +31,12 @@ describe("JournalAnalytics", () => {
             },
             dataQuality: { cleanRows: 3, warningRows: 0, issues: [] },
             trades: { wins: 2, losses: 1, breakeven: 0 },
+            equityCurve: [
+              { tradeNumber: 0, balance: 10000, pnl: 0 },
+              { tradeNumber: 1, rowId: "row-1", balance: 10100, pnl: 100 },
+              { tradeNumber: 2, rowId: "row-2", balance: 10080, pnl: -20 },
+              { tradeNumber: 3, rowId: "row-3", balance: 10110, pnl: 30 },
+            ],
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),
@@ -47,5 +53,7 @@ describe("JournalAnalytics", () => {
     expect(await screen.findByText("66,67%")).toBeInTheDocument();
     expect(screen.getByText("Сетап")).toBeInTheDocument();
     expect(screen.getByText("Для расчёта нужны отрицательные значения PnL")).toBeInTheDocument();
+    expect(screen.getByText("Кривая депозита")).toBeInTheDocument();
+    expect(screen.getByText("+110")).toBeInTheDocument();
   });
 });

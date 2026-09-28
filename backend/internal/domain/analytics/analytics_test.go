@@ -29,6 +29,9 @@ func TestCalculateReportAndDerivedR(t *testing.T) {
 	assertMetric(t, report.Metrics.ProfitFactor, 5, 3)
 	assertMetric(t, report.Metrics.TotalR, 4, 3)
 	assertMetric(t, report.Metrics.AverageR, 4.0/3, 3)
+	if len(report.EquityCurve) != 4 || report.EquityCurve[0].Balance != 10000 || report.EquityCurve[3].Balance != 10400 {
+		t.Fatalf("unexpected equity curve: %#v", report.EquityCurve)
+	}
 	if report.DataQuality.WarningRows != 0 || report.SelectDistributions[0].Total != 3 {
 		t.Fatalf("unexpected report: %#v", report)
 	}

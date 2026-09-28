@@ -198,6 +198,27 @@ select, textarea { font: inherit; }
 .quality-notice { align-items: baseline; background: #fffcf4; border-left: 2px solid #b7791f; color: #5f451a; display: flex; gap: 12px; margin-top: 14px; padding: 9px 11px; }
 .quality-notice span { font-size: 11px; font-weight: 600; }
 .quality-notice small { color: #806532; font-size: 10px; }
+.equity-section { margin-top: 4px; }
+.equity-heading { align-items: center; }
+.equity-change { display: grid; justify-items: end; }
+.equity-change span { color: #858c93; font-size: 10px; }
+.equity-change strong { font-size: 16px; margin-top: 3px; }
+.positive { color: #276749; }
+.negative { color: #a12c2c; }
+.equity-chart { min-height: 260px; overflow: hidden; position: relative; width: 100%; }
+.equity-chart svg { display: block; height: auto; min-height: 260px; width: 100%; }
+.equity-grid-line { stroke: #e8eaec; stroke-width: 1; }
+.equity-start-line { stroke: #aeb4ba; stroke-dasharray: 5 5; stroke-width: 1; }
+.equity-axis-label { fill: #858c93; font-size: 10px; }
+.equity-area { fill: #dcebe4; opacity: .55; }
+.equity-line { fill: none; stroke: #286a50; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
+.equity-hit { fill: transparent; cursor: crosshair; }
+.equity-point { fill: #fff; stroke: #286a50; stroke-width: 2; transition: r .12s ease; }
+.equity-point.active { fill: #286a50; }
+.equity-tooltip { background: #20262b; color: #fff; display: grid; min-width: 104px; padding: 8px 10px; pointer-events: none; position: absolute; transform: translate(-50%, calc(-100% - 12px)); z-index: 2; }
+.equity-tooltip span { color: #bec5ca; font-size: 9px; }
+.equity-tooltip strong { font-size: 13px; margin-top: 2px; }
+.equity-tooltip small { font-size: 10px; margin-top: 3px; }
 .analytics-section-heading { align-items: end; border-bottom: 1px solid #dfe2e5; display: flex; justify-content: space-between; margin-top: 34px; padding-bottom: 12px; }
 .analytics-section-heading h2 { font-size: 16px; margin: 0 0 4px; }
 .analytics-section-heading p { color: #687078; font-size: 12px; margin: 0; }
@@ -231,6 +252,8 @@ select, textarea { font: inherit; }
   .image-preview-dock { flex-direction: column; max-height: calc(100vh - 80px); overflow-y: auto; right: 12px; top: 68px; }
   .image-preview { width: min(72vw, 320px) !important; }
   .analytics-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .equity-chart { margin: 0 -8px; width: calc(100% + 16px); }
+  .equity-tooltip { display: none; }
   .distribution-list { grid-template-columns: 1fr; }
   .distribution, .distribution:nth-child(even) { border-right: 0; padding-left: 0; padding-right: 0; }
 }

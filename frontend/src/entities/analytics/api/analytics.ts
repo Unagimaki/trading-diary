@@ -20,6 +20,13 @@ export type SelectDistribution = {
   values: DistributionValue[];
 };
 
+export type EquityPoint = {
+  tradeNumber: number;
+  rowId?: string;
+  balance: number;
+  pnl: number;
+};
+
 export type JournalAnalytics = {
   observationCount: number;
   selectDistributions: SelectDistribution[];
@@ -37,6 +44,7 @@ export type JournalAnalytics = {
     issues: { rowId: string; codes: string[] }[];
   };
   trades: { wins: number; losses: number; breakeven: number };
+  equityCurve: EquityPoint[];
 };
 
 export const analyticsApi = {
