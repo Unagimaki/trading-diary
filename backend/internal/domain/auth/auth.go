@@ -44,7 +44,10 @@ func (s *Service) Register(ctx context.Context, name, email, password string) (U
 
 func (s *Service) Login(ctx context.Context, email, password string) (User, error) {
 	user, hash, err := s.repo.UserByEmail(ctx, strings.ToLower(strings.TrimSpace(email)))
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+	if err != nil {
+		return User{}, err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 		return User{}, ErrInvalidCredentials
 	}
 	return user, nil

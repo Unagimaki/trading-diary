@@ -10,7 +10,7 @@ import (
 var ErrNotFound = errors.New("column not found")
 var ErrInvalid = errors.New("invalid column")
 var types = map[string]bool{"text": true, "number": true, "select": true, "date": true, "boolean": true, "image": true}
-var roles = map[string]string{"trade_result": "select", "pnl": "number", "r": "number"}
+var roles = map[string]string{"trade_result": "select", "pnl": "number", "r": "number", "risk": "number"}
 
 type Column struct {
 	ID        string    `json:"id"`
@@ -88,6 +88,9 @@ func validate(v Values) (Values, error) {
 			}
 		}
 		v.Options = clean
+		if v.Role != nil && *v.Role == "trade_result" && len(v.Options) == 0 {
+			v.Options = []string{"Win", "Loss", "Breakeven"}
+		}
 	}
 	return v, nil
 }

@@ -18,3 +18,23 @@ func TestValidValue(t *testing.T) {
 		}
 	}
 }
+
+func TestValidRoleValue(t *testing.T) {
+	tests := []struct {
+		role string
+		raw  string
+		want bool
+	}{
+		{"risk", `1`, true},
+		{"risk", `0.01`, true},
+		{"risk", `0`, false},
+		{"risk", `-1`, false},
+		{"r", `-1`, false},
+		{"pnl", `-100`, true},
+	}
+	for _, tt := range tests {
+		if got := validRoleValue(tt.role, json.RawMessage(tt.raw)); got != tt.want {
+			t.Errorf("%s %s: got %v, want %v", tt.role, tt.raw, got, tt.want)
+		}
+	}
+}

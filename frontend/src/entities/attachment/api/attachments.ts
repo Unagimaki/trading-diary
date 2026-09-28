@@ -1,5 +1,6 @@
 import { API_URL } from "@/shared/config/env";
 import { apiRequest } from "@/shared/api/http";
+import { responseError } from "@/shared/api/api-error";
 export type Attachment = {
   id: string;
   name: string;
@@ -21,12 +22,7 @@ export const attachmentsApi = {
       `${API_URL}/journals/${journalId}/rows/${rowId}/cells/${columnId}/image`,
       { method: "POST", body, credentials: "include" },
     );
-    if (!response.ok)
-      throw new Error(
-        (
-          await response.json().catch(() => ({ error: "Ошибка загрузки" }))
-        ).error,
-      );
+    if (!response.ok) throw await responseError(response);
     return response.json() as Promise<Attachment>;
   },
   remove: (journalId: string, rowId: string, columnId: string) =>

@@ -28,6 +28,9 @@ func (r *AuthRepository) UserByEmail(ctx context.Context, email string) (auth.Us
 	var u auth.User
 	var hash string
 	err := r.pool.QueryRow(ctx, `SELECT id,name,email,password_hash FROM users WHERE email=$1`, email).Scan(&u.ID, &u.Name, &u.Email, &hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = auth.ErrInvalidCredentials
+	}
 	return u, hash, err
 }
 func (r *AuthRepository) CreateSession(ctx context.Context, userID, tokenHash string, expires time.Time) error {

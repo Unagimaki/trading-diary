@@ -11,10 +11,12 @@ import (
 	"time"
 )
 
-const MaxSize int64 = 5 << 20
+const MaxSize int64 = 10 << 20
 
 var ErrNotFound = errors.New("attachment target not found")
 var ErrInvalidFile = errors.New("invalid image")
+var ErrTooLarge = errors.New("image is too large")
+var ErrUnsupportedType = errors.New("unsupported image type")
 
 type Attachment struct {
 	ID        string    `json:"id"`
@@ -46,8 +48,11 @@ func NewService(repo Repository, storage Storage) *Service {
 	return &Service{repo: repo, storage: storage}
 }
 func (s *Service) Upload(ctx context.Context, userID, journalID, rowID, columnID, name string, size int64, source io.Reader) (Attachment, error) {
-	if size <= 0 || size > MaxSize {
+	if size <= 0 {
 		return Attachment{}, ErrInvalidFile
+	}
+	if size > MaxSize {
+		return Attachment{}, ErrTooLarge
 	}
 	head := make([]byte, 512)
 	n, err := io.ReadFull(source, head)
@@ -57,7 +62,7 @@ func (s *Service) Upload(ctx context.Context, userID, journalID, rowID, columnID
 	head = head[:n]
 	mime := http.DetectContentType(head)
 	if mime != "image/jpeg" && mime != "image/png" && mime != "image/webp" {
-		return Attachment{}, ErrInvalidFile
+		return Attachment{}, ErrUnsupportedType
 	}
 	key, err := s.storage.Save(ctx, io.MultiReader(bytes.NewReader(head), source))
 	if err != nil {

@@ -17,6 +17,9 @@ func (r *repositoryStub) Create(_ context.Context, _ string, name string) (Journ
 func (r *repositoryStub) Rename(context.Context, string, string, string) (Journal, error) {
 	return Journal{}, nil
 }
+func (r *repositoryStub) UpdateSettings(context.Context, string, string, float64, float64, float64) (Journal, error) {
+	return Journal{}, nil
+}
 
 func TestCreateNormalizesName(t *testing.T) {
 	repo := &repositoryStub{}
@@ -33,5 +36,11 @@ func TestCreateRejectsEmptyName(t *testing.T) {
 	_, err := NewService(&repositoryStub{}).Create(context.Background(), "user", "   ")
 	if err != ErrInvalidName {
 		t.Fatalf("expected ErrInvalidName, got %v", err)
+	}
+}
+func TestUpdateSettingsRejectsInvalidRisk(t *testing.T) {
+	_, err := NewService(&repositoryStub{}).UpdateSettings(context.Background(), "user", "journal", 10000, 0, 2)
+	if err != ErrInvalidSettings {
+		t.Fatalf("expected ErrInvalidSettings, got %v", err)
 	}
 }

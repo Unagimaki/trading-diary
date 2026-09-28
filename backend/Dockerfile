@@ -10,15 +10,18 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api ./c
 
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates su-exec \
     && addgroup -S app \
-    && adduser -S -G app app
+    && adduser -S -G app app \
+    && mkdir -p /data/uploads \
+    && chown -R app:app /data/uploads
 
 WORKDIR /app
 COPY --from=builder /out/api /app/api
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 0755 /app/docker-entrypoint.sh
 
-USER app
 EXPOSE 8080
 
-ENTRYPOINT ["/app/api"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 

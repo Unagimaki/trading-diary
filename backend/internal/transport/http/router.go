@@ -2,9 +2,11 @@ package httptransport
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/trade-diary/backend/internal/domain/analytics"
 	"github.com/trade-diary/backend/internal/domain/attachment"
 	"github.com/trade-diary/backend/internal/domain/auth"
 	"github.com/trade-diary/backend/internal/domain/column"
@@ -12,22 +14,26 @@ import (
 	"github.com/trade-diary/backend/internal/domain/observation"
 )
 
-func NewRouter(frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service, observationService *observation.Service, attachmentService *attachment.Service) http.Handler {
+func NewRouter(logger *slog.Logger, frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service, observationService *observation.Service, attachmentService *attachment.Service, analyticsService *analytics.Service) http.Handler {
 	router := mux.NewRouter()
+	metrics := &requestMetrics{}
+	router.Use(observability(logger, metrics))
 	router.Use(cors(frontendOrigin))
 	router.HandleFunc("/health", health).Methods(http.MethodGet)
+	router.Handle("/metrics", metrics).Methods(http.MethodGet)
 	handler := authHandler{service: authService}
 	router.HandleFunc("/auth/register", handler.register).Methods(http.MethodPost)
 	router.HandleFunc("/auth/login", handler.login).Methods(http.MethodPost)
 	router.HandleFunc("/auth/logout", handler.logout).Methods(http.MethodPost)
 	router.HandleFunc("/auth/me", handler.me).Methods(http.MethodGet)
-	journals := journalHandler{auth: authService, journals: journalService}
+	journals := journalHandler{auth: authService, journals: journalService, rows: observationService}
 	router.HandleFunc("/journals", journals.list).Methods(http.MethodGet)
 	router.HandleFunc("/journals", journals.create).Methods(http.MethodPost)
 	router.HandleFunc("/journals/{id}", journals.get).Methods(http.MethodGet)
 	router.HandleFunc("/journals/{id}", journals.rename).Methods(http.MethodPatch)
+	router.HandleFunc("/journals/{id}/settings", journals.updateSettings).Methods(http.MethodPatch)
 	router.HandleFunc("/journals/{id}", journals.delete).Methods(http.MethodDelete)
-	columns := columnHandler{auth: authService, columns: columnService}
+	columns := columnHandler{auth: authService, columns: columnService, rows: observationService}
 	router.HandleFunc("/journals/{journalID}/columns", columns.list).Methods(http.MethodGet)
 	router.HandleFunc("/journals/{journalID}/columns", columns.create).Methods(http.MethodPost)
 	router.HandleFunc("/journals/{journalID}/columns/{id}", columns.update).Methods(http.MethodPatch)
@@ -42,6 +48,8 @@ func NewRouter(frontendOrigin string, authService *auth.Service, journalService 
 	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}/image", images.upload).Methods(http.MethodPost)
 	router.HandleFunc("/journals/{journalID}/rows/{rowID}/cells/{columnID}/image", images.delete).Methods(http.MethodDelete)
 	router.HandleFunc("/attachments/{id}/content", images.content).Methods(http.MethodGet)
+	analyticsHandler := analyticsHandler{auth: authService, analytics: analyticsService}
+	router.HandleFunc("/journals/{journalID}/analytics", analyticsHandler.get).Methods(http.MethodGet)
 
 	return router
 }

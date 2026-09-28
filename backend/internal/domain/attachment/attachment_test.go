@@ -47,7 +47,7 @@ func TestUploadPNG(t *testing.T) {
 }
 func TestUploadRejectsText(t *testing.T) {
 	_, err := NewService(&repositoryStub{}, &storageStub{}).Upload(context.Background(), "u", "j", "r", "c", "file.txt", 4, strings.NewReader("text"))
-	if err != ErrInvalidFile {
-		t.Fatalf("expected ErrInvalidFile, got %v", err)
+	if err != ErrUnsupportedType {
+		t.Fatalf("expected ErrUnsupportedType, got %v", err)
 	}
 }

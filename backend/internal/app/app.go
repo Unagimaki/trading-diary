@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/trade-diary/backend/internal/config"
+	"github.com/trade-diary/backend/internal/domain/analytics"
 	"github.com/trade-diary/backend/internal/domain/attachment"
 	"github.com/trade-diary/backend/internal/domain/auth"
 	"github.com/trade-diary/backend/internal/domain/column"
@@ -46,10 +47,11 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	attachmentService := attachment.NewService(postgres.NewAttachmentRepository(pool), storage)
+	analyticsService := analytics.NewService(postgres.NewAnalyticsRepository(pool))
 
 	server := &http.Server{
 		Addr:              a.config.HTTPAddress,
-		Handler:           httptransport.NewRouter(a.config.FrontendOrigin, authService, journalService, columnService, observationService, attachmentService),
+		Handler:           httptransport.NewRouter(a.logger, a.config.FrontendOrigin, authService, journalService, columnService, observationService, attachmentService, analyticsService),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,

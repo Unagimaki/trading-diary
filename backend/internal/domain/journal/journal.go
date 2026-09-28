@@ -3,18 +3,23 @@ package journal
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"time"
 )
 
 var ErrNotFound = errors.New("journal not found")
 var ErrInvalidName = errors.New("invalid journal name")
+var ErrInvalidSettings = errors.New("invalid journal settings")
 
 type Journal struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	InitialDeposit float64   `json:"initialDeposit"`
+	RiskPercent    float64   `json:"riskPercent"`
+	DefaultRR      float64   `json:"defaultRR"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type Repository interface {
@@ -22,6 +27,7 @@ type Repository interface {
 	Create(context.Context, string, string) (Journal, error)
 	Get(context.Context, string, string) (Journal, error)
 	Rename(context.Context, string, string, string) (Journal, error)
+	UpdateSettings(context.Context, string, string, float64, float64, float64) (Journal, error)
 	Delete(context.Context, string, string) error
 }
 
@@ -50,6 +56,12 @@ func (s *Service) Rename(ctx context.Context, userID, id, name string) (Journal,
 		return Journal{}, err
 	}
 	return s.repo.Rename(ctx, userID, id, name)
+}
+func (s *Service) UpdateSettings(ctx context.Context, userID, id string, initialDeposit, riskPercent, defaultRR float64) (Journal, error) {
+	if math.IsNaN(initialDeposit) || math.IsInf(initialDeposit, 0) || initialDeposit <= 0 || math.IsNaN(riskPercent) || math.IsInf(riskPercent, 0) || riskPercent <= 0 || riskPercent > 100 || math.IsNaN(defaultRR) || math.IsInf(defaultRR, 0) || defaultRR <= 0 {
+		return Journal{}, ErrInvalidSettings
+	}
+	return s.repo.UpdateSettings(ctx, userID, id, initialDeposit, riskPercent, defaultRR)
 }
 func validName(name string) (string, error) {
 	name = strings.TrimSpace(name)

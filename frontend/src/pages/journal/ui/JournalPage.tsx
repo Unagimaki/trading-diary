@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -7,9 +7,13 @@ import {
   ExternalLink,
   ImagePlus,
   Plus,
+  RotateCcw,
   Settings2,
   Trash2,
+  TriangleAlert,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import {
@@ -23,9 +27,12 @@ import {
   attachmentsApi,
   type Attachment,
 } from "@/entities/attachment/api/attachments";
-import { journalsApi } from "@/entities/journal/api/journals";
+import { journalsApi, type Journal } from "@/entities/journal/api/journals";
 import { rowsApi } from "@/entities/observation/api/rows";
+import type { DataWarning } from "@/entities/observation/api/rows";
 import { queryClient } from "@/shared/api/query-client";
+import { errorMessage, errorRequestId } from "@/shared/api/api-error";
+import { JournalAnalytics } from "@/widgets/journal-analytics";
 
 const typeLabels: Record<ColumnType, string> = {
   text: "Текст",
@@ -38,17 +45,37 @@ const typeLabels: Record<ColumnType, string> = {
 const roleLabels: Record<Exclude<ColumnRole, null>, string> = {
   trade_result: "Результат сделки",
   pnl: "PnL",
-  r: "R-множитель",
+  r: "RR (Risk/Reward)",
+  risk: "Риск, %",
+};
+const roleHints: Partial<Record<Exclude<ColumnRole, null>, string>> = {
+  r: "Положительное отношение прибыли к риску: 3 означает 1 : 3.",
+  pnl: "PnL рассчитывается по результату, риску и RR; его можно переопределить вручную.",
+  risk: "Процент депозита под риском. По умолчанию берётся из настроек журнала.",
+  trade_result: "Win, Loss или Breakeven запускает расчёт PnL.",
 };
 const compatibleRoles = (type: ColumnType): Exclude<ColumnRole, null>[] =>
-  type === "select" ? ["trade_result"] : type === "number" ? ["pnl", "r"] : [];
+  type === "select" ? ["trade_result"] : type === "number" ? ["pnl", "r", "risk"] : [];
+const warningLabels: Record<DataWarning, string> = {
+  result_pnl_conflict: "Результат сделки противоречит знаку PnL",
+  result_r_conflict: "Результат сделки противоречит знаку R",
+  pnl_risk_r_conflict: "PnL не совпадает с расчётом Risk × R",
+  risk_not_positive: "Риск должен быть больше нуля",
+  rr_not_positive: "RR должен быть больше нуля",
+};
 
 export function JournalPage() {
   const { id = "" } = useParams();
+  const [view, setView] = useState<"journal" | "analytics">("journal");
   const [editing, setEditing] = useState<JournalColumn | null | undefined>(
     undefined,
   );
   const [deleting, setDeleting] = useState<JournalColumn | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [hoveredImage, setHoveredImage] = useState<Attachment | null>(null);
+  const [pinnedImage, setPinnedImage] = useState<Attachment | null>(null);
+  const [previewSize, setPreviewSize] = useState(25);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const journal = useQuery({
     queryKey: ["journal", id],
     queryFn: () => journalsApi.get(id),
@@ -64,8 +91,13 @@ export function JournalPage() {
     queryFn: () => rowsApi.list(id),
     enabled: journal.isSuccess,
   });
-  const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: ["columns", id] });
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["columns", id] }),
+      queryClient.invalidateQueries({ queryKey: ["rows", id] }),
+      queryClient.invalidateQueries({ queryKey: ["analytics", id] }),
+    ]);
+  };
   const save = useMutation({
     mutationFn: (data: ColumnValues) =>
       editing
@@ -100,8 +132,12 @@ export function JournalPage() {
       }),
     onSuccess: refresh,
   });
-  const refreshRows = () =>
-    queryClient.invalidateQueries({ queryKey: ["rows", id] });
+  const refreshRows = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["rows", id] }),
+      queryClient.invalidateQueries({ queryKey: ["analytics", id] }),
+    ]);
+  };
   const addRow = useMutation({
     mutationFn: () => rowsApi.create(id),
     onSuccess: refreshRows,
@@ -122,6 +158,41 @@ export function JournalPage() {
     }) => rowsApi.setCell(id, rowId, columnId, value),
     onSuccess: refreshRows,
   });
+  const saveSettings = useMutation({
+    mutationFn: ({ initialDeposit, riskPercent, defaultRR }: { initialDeposit: number; riskPercent: number; defaultRR: number }) =>
+      journalsApi.updateSettings(id, initialDeposit, riskPercent, defaultRR),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["journal", id] }),
+        queryClient.invalidateQueries({ queryKey: ["rows", id] }),
+        queryClient.invalidateQueries({ queryKey: ["analytics", id] }),
+      ]);
+      setSettingsOpen(false);
+    },
+  });
+  useEffect(() => {
+    const closePinnedImage = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPinnedImage(null);
+    };
+    window.addEventListener("keydown", closePinnedImage);
+    return () => {
+      window.removeEventListener("keydown", closePinnedImage);
+      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    };
+  }, []);
+  const showHoveredImage = (image: Attachment) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHoveredImage(image);
+  };
+  const keepHoveredImage = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  };
+  const hideHoveredImage = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setHoveredImage(null), 250);
+  };
+  const resizePreview = (change: number) =>
+    setPreviewSize((size) => Math.min(42, Math.max(18, size + change)));
   if (journal.isError) return <Navigate to="/" replace />;
   return (
     <main className="workspace">
@@ -141,6 +212,14 @@ export function JournalPage() {
           </div>
           <div className="journal-actions">
             <button
+              className="secondary-button icon-button"
+              title="Настройки расчётов"
+              aria-label="Настройки расчётов"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings2 size={16} />
+            </button>
+            <button
               className="secondary-button button-with-icon"
               onClick={() => addRow.mutate()}
               disabled={!columns.data?.length}
@@ -157,11 +236,30 @@ export function JournalPage() {
             </button>
           </div>
         </div>
-        {columns.isPending && <div className="list-status">Загрузка…</div>}
-        {columns.isError && (
+        <div className="journal-tabs" role="tablist" aria-label="Раздел журнала">
+          <button
+            role="tab"
+            aria-selected={view === "journal"}
+            className={view === "journal" ? "active" : ""}
+            onClick={() => setView("journal")}
+          >
+            Журнал
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === "analytics"}
+            className={view === "analytics" ? "active" : ""}
+            onClick={() => setView("analytics")}
+          >
+            Аналитика
+          </button>
+        </div>
+        {view === "analytics" && <JournalAnalytics journalId={id} />}
+        {view === "journal" && columns.isPending && <div className="list-status">Загрузка…</div>}
+        {view === "journal" && columns.isError && (
           <div className="list-status error">Не удалось загрузить колонки</div>
         )}
-        {columns.data?.length === 0 && (
+        {view === "journal" && columns.data?.length === 0 && (
           <div className="empty-state journal-empty">
             <button
               className="empty-mark"
@@ -174,7 +272,7 @@ export function JournalPage() {
             <p>Добавьте характеристики, которые хотите фиксировать.</p>
           </div>
         )}
-        {!!columns.data?.length && (
+        {view === "journal" && !!columns.data?.length && (
           <div className="table-shell">
             <table className="journal-table">
               <thead>
@@ -232,9 +330,18 @@ export function JournalPage() {
               </thead>
               <tbody>
                 {rows.data?.map((row, index) => (
-                  <tr key={row.id}>
+                  <tr key={row.id} className={row.warnings?.length ? "row-warning" : undefined}>
                     <td className="row-number row-control">
                       <span>{index + 1}</span>
+                      {!!row.warnings?.length && (
+                        <TriangleAlert
+                          className="row-warning-icon"
+                          size={13}
+                          aria-label="Есть несогласованные данные"
+                        >
+                          <title>{row.warnings.map((code) => warningLabels[code]).join("; ")}</title>
+                        </TriangleAlert>
+                      )}
                       <button
                         title="Удалить строку"
                         onClick={() => deleteRow.mutate(row.id)}
@@ -250,6 +357,9 @@ export function JournalPage() {
                           column={item}
                           value={row.values[item.id]}
                           onRefresh={refreshRows}
+                          onImageEnter={showHoveredImage}
+                          onImageLeave={hideHoveredImage}
+                          onImagePin={setPinnedImage}
                           onSave={(value) =>
                             saveCell.mutate({
                               rowId: row.id,
@@ -282,6 +392,35 @@ export function JournalPage() {
           </div>
         )}
       </section>
+      {(hoveredImage || pinnedImage) && (
+        <div
+          className={`image-preview-dock${hoveredImage && pinnedImage && hoveredImage.id !== pinnedImage.id ? " comparing" : ""}`}
+        >
+          {hoveredImage && hoveredImage.id !== pinnedImage?.id && (
+            <ImagePreview
+              image={hoveredImage}
+              label={pinnedImage ? "Сравнение" : "Предпросмотр"}
+              size={previewSize}
+              onIncrease={() => resizePreview(5)}
+              onDecrease={() => resizePreview(-5)}
+              onControlsEnter={keepHoveredImage}
+              onControlsLeave={hideHoveredImage}
+            />
+          )}
+          {pinnedImage && (
+            <ImagePreview
+              image={pinnedImage}
+              label="Закреплено"
+              size={previewSize}
+              onIncrease={() => resizePreview(5)}
+              onDecrease={() => resizePreview(-5)}
+              onClose={() => setPinnedImage(null)}
+              onControlsEnter={keepHoveredImage}
+              onControlsLeave={hideHoveredImage}
+            />
+          )}
+        </div>
+      )}
       {editing !== undefined && (
         <ColumnDialog
           column={editing}
@@ -290,6 +429,14 @@ export function JournalPage() {
           onSave={(values) => save.mutate(values)}
         />
       )}{" "}
+      {settingsOpen && journal.data && (
+        <JournalSettingsDialog
+          journal={journal.data}
+          pending={saveSettings.isPending}
+          onClose={() => setSettingsOpen(false)}
+          onSave={(initialDeposit, riskPercent, defaultRR) => saveSettings.mutate({ initialDeposit, riskPercent, defaultRR })}
+        />
+      )}
       {deleting && (
         <div className="dialog-backdrop">
           <div className="dialog" role="dialog" aria-modal="true">
@@ -323,6 +470,9 @@ function CellEditor({
   value,
   onSave,
   onRefresh,
+  onImageEnter,
+  onImageLeave,
+  onImagePin,
 }: {
   journalId: string;
   rowId: string;
@@ -330,6 +480,9 @@ function CellEditor({
   value: unknown;
   onSave: (value: unknown) => void;
   onRefresh: () => Promise<unknown>;
+  onImageEnter: (image: Attachment) => void;
+  onImageLeave: () => void;
+  onImagePin: (image: Attachment) => void;
 }) {
   if (column.type === "select")
     return (
@@ -355,35 +508,276 @@ function CellEditor({
       </label>
     );
   if (column.type === "image")
-    return <ImageCell journalId={journalId} rowId={rowId} columnId={column.id} value={value} onRefresh={onRefresh} />;
+    return (
+      <ImageCell
+        journalId={journalId}
+        rowId={rowId}
+        columnId={column.id}
+        value={value}
+        onRefresh={onRefresh}
+        onImageEnter={onImageEnter}
+        onImageLeave={onImageLeave}
+        onImagePin={onImagePin}
+      />
+    );
   const type =
     column.type === "number"
       ? "number"
       : column.type === "date"
         ? "date"
         : "text";
-  return (
+  const input = (
     <input
       key={String(value)}
       className="cell-input"
       type={type}
+      min={column.role === "risk" || column.role === "r" ? 0.01 : undefined}
+      max={column.role === "risk" ? 100 : undefined}
+      step={column.type === "number" ? "any" : undefined}
       defaultValue={value == null ? "" : String(value)}
       onBlur={(e) => {
         const raw = e.target.value;
+        if (raw !== "" && !e.target.checkValidity()) {
+          e.target.reportValidity();
+          e.target.value = value == null ? "" : String(value);
+          return;
+        }
         const next =
           raw === "" ? null : column.type === "number" ? Number(raw) : raw;
         if (next !== value) onSave(next);
       }}
     />
   );
+  if (column.role === "r") {
+    return <div className="rr-cell"><span>1 :</span>{input}</div>;
+  }
+  if (column.role === "risk") {
+    return <div className="risk-cell">{input}<span>%</span></div>;
+  }
+  return input;
 }
 
-function ImageCell({ journalId, rowId, columnId, value, onRefresh }: { journalId: string; rowId: string; columnId: string; value: unknown; onRefresh: () => Promise<unknown> }) {
-  const current = value && typeof value === "object" && "id" in value ? value as Attachment : null;
-  const upload = useMutation({ mutationFn: (file: File) => attachmentsApi.upload(journalId, rowId, columnId, file), onSuccess: onRefresh });
-  const remove = useMutation({ mutationFn: () => attachmentsApi.remove(journalId, rowId, columnId), onSuccess: onRefresh });
-  if (current) return <div className="image-cell"><img src={attachmentsApi.contentUrl(current.id)} alt={current.name} /><span title={current.name}>{current.name}</span><a href={attachmentsApi.contentUrl(current.id)} target="_blank" rel="noreferrer" title="Открыть"><ExternalLink size={14} /></a><button title="Удалить" onClick={() => remove.mutate()}><X size={14} /></button></div>;
-  return <label className="image-upload"><ImagePlus size={15} /><span>{upload.isPending ? "Загрузка…" : "Добавить"}</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={upload.isPending} onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate(file); }} /></label>;
+function ImageCell({
+  journalId,
+  rowId,
+  columnId,
+  value,
+  onRefresh,
+  onImageEnter,
+  onImageLeave,
+  onImagePin,
+}: {
+  journalId: string;
+  rowId: string;
+  columnId: string;
+  value: unknown;
+  onRefresh: () => Promise<unknown>;
+  onImageEnter: (image: Attachment) => void;
+  onImageLeave: () => void;
+  onImagePin: (image: Attachment) => void;
+}) {
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const current =
+    value && typeof value === "object" && "id" in value
+      ? (value as Attachment)
+      : null;
+  const upload = useMutation({
+    mutationFn: (file: File) =>
+      attachmentsApi.upload(journalId, rowId, columnId, file),
+    onSuccess: onRefresh,
+  });
+  const remove = useMutation({
+    mutationFn: () => attachmentsApi.remove(journalId, rowId, columnId),
+    onSuccess: onRefresh,
+  });
+  if (current)
+    return (
+      <div className="image-cell">
+        <button
+          className="image-thumbnail"
+          type="button"
+          title="Закрепить изображение"
+          aria-label={`Закрепить изображение ${current.name}`}
+          onMouseEnter={() => onImageEnter(current)}
+          onMouseLeave={onImageLeave}
+          onFocus={() => onImageEnter(current)}
+          onBlur={onImageLeave}
+          onClick={() => onImagePin(current)}
+        >
+          <img src={attachmentsApi.contentUrl(current.id)} alt="" />
+        </button>
+        <span title={current.name}>{current.name}</span>
+        <a
+          href={attachmentsApi.contentUrl(current.id)}
+          target="_blank"
+          rel="noreferrer"
+          title="Открыть"
+        >
+          <ExternalLink size={14} />
+        </a>
+        <button title="Удалить" onClick={() => remove.mutate()}>
+          <X size={14} />
+        </button>
+      </div>
+    );
+  if (upload.isError)
+    return (
+      <div
+        className="image-error"
+        title={
+          errorRequestId(upload.error)
+            ? `Код: ${errorRequestId(upload.error)}`
+            : undefined
+        }
+      >
+        <span>{errorMessage(upload.error)}</span>
+        <button
+          title="Повторить"
+          disabled={!lastFile}
+          onClick={() => lastFile && upload.mutate(lastFile)}
+        >
+          <RotateCcw size={14} />
+        </button>
+      </div>
+    );
+  return (
+    <label className="image-upload">
+      <ImagePlus size={15} />
+      <span>{upload.isPending ? "Загрузка…" : "Добавить"}</span>
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        disabled={upload.isPending}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            setLastFile(file);
+            upload.mutate(file);
+          }
+        }}
+      />
+    </label>
+  );
+}
+
+function ImagePreview({
+  image,
+  label,
+  size,
+  onIncrease,
+  onDecrease,
+  onClose,
+  onControlsEnter,
+  onControlsLeave,
+}: {
+  image: Attachment;
+  label: string;
+  size: number;
+  onIncrease: () => void;
+  onDecrease: () => void;
+  onClose?: () => void;
+  onControlsEnter: () => void;
+  onControlsLeave: () => void;
+}) {
+  return (
+    <aside
+      className="image-preview"
+      aria-label={`${label}: ${image.name}`}
+      style={{ width: `clamp(240px, ${size}vw, 680px)` }}
+    >
+      <img src={attachmentsApi.contentUrl(image.id)} alt={image.name} />
+      <div className="image-preview-caption" title={image.name}>
+        <span>{label}</span>
+        {image.name}
+      </div>
+      <div
+        className="image-preview-controls"
+        onMouseEnter={onControlsEnter}
+        onMouseLeave={onControlsLeave}
+      >
+        <button
+          type="button"
+          title="Уменьшить"
+          aria-label="Уменьшить изображение"
+          onClick={onDecrease}
+          disabled={size <= 18}
+        >
+          <ZoomOut size={15} />
+        </button>
+        <button
+          type="button"
+          title="Увеличить"
+          aria-label="Увеличить изображение"
+          onClick={onIncrease}
+          disabled={size >= 42}
+        >
+          <ZoomIn size={15} />
+        </button>
+        {onClose && (
+          <button
+            className="image-preview-close"
+            type="button"
+            title="Закрыть"
+            aria-label="Закрыть закреплённое изображение"
+            onClick={onClose}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function JournalSettingsDialog({
+  journal,
+  pending,
+  onClose,
+  onSave,
+}: {
+  journal: Journal;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (initialDeposit: number, riskPercent: number, defaultRR: number) => void;
+}) {
+  const [initialDeposit, setInitialDeposit] = useState(String(journal.initialDeposit));
+  const [riskPercent, setRiskPercent] = useState(String(journal.riskPercent));
+  const [defaultRR, setDefaultRR] = useState(String(journal.defaultRR));
+  const deposit = Number(initialDeposit);
+  const risk = Number(riskPercent);
+  const rr = Number(defaultRR);
+  const valid = Number.isFinite(deposit) && deposit > 0 && Number.isFinite(risk) && risk > 0 && risk <= 100 && Number.isFinite(rr) && rr > 0;
+  const defaultRisk = valid ? deposit * risk / 100 : 0;
+  return (
+    <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="dialog journal-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="journal-settings-title">
+        <form onSubmit={(event) => { event.preventDefault(); if (valid) onSave(deposit, risk, rr); }}>
+          <h2 id="journal-settings-title">Настройки расчётов</h2>
+          <p>Эти значения используются, когда в строке не указан индивидуальный риск.</p>
+          <label>
+            Начальный депозит
+            <input type="number" min="0.01" step="0.01" required value={initialDeposit} onChange={(event) => setInitialDeposit(event.target.value)} />
+          </label>
+          <label>
+            Риск на сделку, %
+            <input type="number" min="0.01" max="100" step="0.01" required value={riskPercent} onChange={(event) => setRiskPercent(event.target.value)} />
+          </label>
+          <label>
+            RR по умолчанию (1 : N)
+            <input type="number" min="0.01" step="any" required value={defaultRR} onChange={(event) => setDefaultRR(event.target.value)} />
+          </label>
+          <div className="default-risk-value">
+            <span>Риск в деньгах</span>
+            <strong>{valid ? defaultRisk.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) : "—"}</strong>
+          </div>
+          <div className="dialog-actions">
+            <button type="button" className="secondary-button" onClick={onClose}>Отмена</button>
+            <button className="primary-button" disabled={pending || !valid}>Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function ColumnDialog({
@@ -450,7 +844,13 @@ function ColumnDialog({
             Системная роль
             <select
               value={role ?? ""}
-              onChange={(e) => setRole((e.target.value || null) as ColumnRole)}
+              onChange={(e) => {
+                const nextRole = (e.target.value || null) as ColumnRole;
+                setRole(nextRole);
+                if (nextRole === "trade_result" && !options.trim()) {
+                  setOptions("Win, Loss, Breakeven");
+                }
+              }}
             >
               <option value="">Без роли</option>
               {roles.map((value) => (
@@ -459,6 +859,7 @@ function ColumnDialog({
                 </option>
               ))}
             </select>
+            {role && <small>{roleHints[role]}</small>}
           </label>
           {type === "select" && (
             <label>

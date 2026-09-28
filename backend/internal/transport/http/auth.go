@@ -30,7 +30,7 @@ func (h authHandler) register(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := h.service.Register(r.Context(), in.Name, in.Email, in.Password)
 	if err != nil {
-		authError(w, err)
+		authError(w, r, err)
 		return
 	}
 	if !h.startSession(w, r, u) {
@@ -45,7 +45,7 @@ func (h authHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := h.service.Login(r.Context(), in.Email, in.Password)
 	if err != nil {
-		authError(w, err)
+		authError(w, r, err)
 		return
 	}
 	if !h.startSession(w, r, u) {
@@ -54,21 +54,18 @@ func (h authHandler) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 func (h authHandler) me(w http.ResponseWriter, r *http.Request) {
-	token, ok := cookieHash(r)
+	u, ok := authenticatedUser(w, r, h.service)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "authentication required")
-		return
-	}
-	u, err := h.service.CurrentUser(r.Context(), token)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
 }
 func (h authHandler) logout(w http.ResponseWriter, r *http.Request) {
 	if token, ok := cookieHash(r); ok {
-		_ = h.service.Logout(r.Context(), token)
+		if err := h.service.Logout(r.Context(), token); err != nil {
+			internalError(w, r, "auth.logout", err)
+			return
+		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	w.WriteHeader(http.StatusNoContent)
@@ -76,13 +73,13 @@ func (h authHandler) logout(w http.ResponseWriter, r *http.Request) {
 func (h authHandler) startSession(w http.ResponseWriter, r *http.Request, u auth.User) bool {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		writeError(w, 500, "internal error")
+		internalError(w, r, "auth.session_token", err, "user_id", u.ID)
 		return false
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	expires := time.Now().Add(30 * 24 * time.Hour)
 	if err := h.service.CreateSession(r.Context(), u.ID, hashToken(token), expires); err != nil {
-		writeError(w, 500, "internal error")
+		internalError(w, r, "auth.create_session", err, "user_id", u.ID)
 		return false
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode})
@@ -94,6 +91,23 @@ func cookieHash(r *http.Request) (string, bool) {
 		return "", false
 	}
 	return hashToken(c.Value), true
+}
+func authenticatedUser(w http.ResponseWriter, r *http.Request, service *auth.Service) (auth.User, bool) {
+	token, ok := cookieHash(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return auth.User{}, false
+	}
+	user, err := service.CurrentUser(r.Context(), token)
+	if errors.Is(err, auth.ErrInvalidCredentials) {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return auth.User{}, false
+	}
+	if err != nil {
+		internalError(w, r, "auth.current_user", err)
+		return auth.User{}, false
+	}
+	return user, true
 }
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
@@ -109,15 +123,16 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	return true
 }
-func authError(w http.ResponseWriter, err error) {
+func authError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, auth.ErrEmailTaken) {
 		writeError(w, 409, "email already registered")
 		return
 	}
-	writeError(w, 400, "invalid credentials")
-}
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	if errors.Is(err, auth.ErrInvalidCredentials) {
+		writeError(w, 400, "invalid credentials")
+		return
+	}
+	internalError(w, r, "auth.authenticate", err)
 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
