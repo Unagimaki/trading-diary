@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { authApi } from "@/entities/user/api/auth";
 import { queryClient } from "@/shared/api/query-client";
 import { errorMessage } from "@/shared/api/api-error";
+import { Button } from "@/shared/ui";
 
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
@@ -72,16 +73,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
         {mutation.error && (
           <div className="form-error">{errorMessage(mutation.error)}</div>
         )}
-        <button
-          className="primary-button auth-submit"
-          disabled={mutation.isPending}
+        <Button
+          variant="primary"
+          className="auth-submit"
+          loading={mutation.isPending}
         >
           {mutation.isPending
             ? "Подождите…"
             : mode === "login"
               ? "Войти"
               : "Зарегистрироваться"}
-        </button>
+        </Button>
         <div className="auth-switch">
           {mode === "login" ? "Нет аккаунта?" : "Уже есть аккаунт?"}{" "}
           <Link to={mode === "login" ? "/register" : "/login"}>

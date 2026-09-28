@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { BarChart3 } from "lucide-react";
+import { StateView } from "@/shared/ui";
 import {
   analyticsApi,
   type AnalyticsMetric,
@@ -21,10 +22,10 @@ export function JournalAnalytics({ journalId }: { journalId: string }) {
   });
 
   if (analytics.isPending) {
-    return <div className="list-status">Загрузка аналитики…</div>;
+    return <StateView kind="loading" title="Собираем аналитику" description="Рассчитываем метрики и кривую депозита." compact />;
   }
   if (analytics.isError) {
-    return <div className="list-status error">Не удалось загрузить аналитику</div>;
+    return <StateView kind="error" title="Не удалось загрузить аналитику" description="Обновите страницу или повторите попытку позже." compact />;
   }
 
   const report = analytics.data;
@@ -34,15 +35,16 @@ export function JournalAnalytics({ journalId }: { journalId: string }) {
         <MetricCard
           label="Наблюдения"
           metric={{ available: true, value: report.observationCount, sampleSize: report.observationCount }}
+          primary
         />
-        <MetricCard label="Winrate" metric={report.metrics.winRate} suffix="%" />
-        <MetricCard label="Total PnL" metric={report.metrics.totalPnl} />
+        <MetricCard label="Winrate" metric={report.metrics.winRate} suffix="%" primary />
+        <MetricCard label="Total PnL" metric={report.metrics.totalPnl} primary financial />
+        <MetricCard label="Profit Factor" metric={report.metrics.profitFactor} primary />
         <MetricCard label="Average PnL" metric={report.metrics.averagePnl} />
-        <MetricCard label="Profit Factor" metric={report.metrics.profitFactor} />
         <MetricCard label="Total R" metric={report.metrics.totalR} suffix="R" />
         <MetricCard label="Average R" metric={report.metrics.averageR} suffix="R" />
-        <CountCard label="Прибыльные сделки" value={report.trades.wins} />
-        <CountCard label="Убыточные сделки" value={report.trades.losses} />
+        <CountCard label="Прибыльные сделки" value={report.trades.wins} tone="positive" />
+        <CountCard label="Убыточные сделки" value={report.trades.losses} tone="negative" />
       </div>
 
       {report.dataQuality.warningRows > 0 && (
@@ -168,22 +170,25 @@ function EquityCurve({ points }: { points: EquityPoint[] }) {
   );
 }
 
-function MetricCard({ label, metric, suffix = "" }: { label: string; metric: AnalyticsMetric; suffix?: string }) {
+function MetricCard({ label, metric, suffix = "", primary = false, financial = false }: { label: string; metric: AnalyticsMetric; suffix?: string; primary?: boolean; financial?: boolean }) {
   const reason = metric.reason ? reasonLabels[metric.reason] : "Недостаточно данных";
+  const tone = financial && metric.available && metric.value !== undefined
+    ? metric.value > 0 ? " positive" : metric.value < 0 ? " negative" : ""
+    : "";
   return (
-    <article className={`metric-card${metric.available ? "" : " unavailable"}`}>
+    <article className={`metric-card${primary ? " metric-card-primary" : ""}${metric.available ? "" : " unavailable"}`}>
       <span>{label}</span>
-      <strong>{metric.available && metric.value !== undefined ? `${formatNumber(metric.value)}${suffix}` : "—"}</strong>
+      <strong className={tone}>{metric.available && metric.value !== undefined ? `${formatNumber(metric.value)}${suffix}` : "—"}</strong>
       <small>{metric.available ? `${metric.sampleSize} значений` : reason}</small>
     </article>
   );
 }
 
-function CountCard({ label, value }: { label: string; value: number }) {
+function CountCard({ label, value, tone }: { label: string; value: number; tone: "positive" | "negative" }) {
   return (
     <article className="metric-card">
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className={tone}>{value}</strong>
       <small>по расчётному результату</small>
     </article>
   );

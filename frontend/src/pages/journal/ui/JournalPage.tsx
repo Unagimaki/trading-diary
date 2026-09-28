@@ -33,6 +33,7 @@ import type { DataWarning } from "@/entities/observation/api/rows";
 import { queryClient } from "@/shared/api/query-client";
 import { errorMessage, errorRequestId } from "@/shared/api/api-error";
 import { JournalAnalytics } from "@/widgets/journal-analytics";
+import { Button, IconButton, StateView } from "@/shared/ui";
 
 const typeLabels: Record<ColumnType, string> = {
   text: "Текст",
@@ -201,39 +202,39 @@ export function JournalPage() {
           <ArrowLeft size={17} />
           Журналы
         </Link>
-        <div className="brand">Trade Diary</div>
+        <div className="brand"><span className="brand-mark">TD</span><span>Trade Diary</span></div>
         <span />
       </header>
       <section className="journal-content">
         <div className="journal-heading">
           <div>
+            <span className="page-eyebrow">Торговый журнал</span>
             <h1>{journal.data?.name ?? "Загрузка…"}</h1>
-            <p>Торговые наблюдения</p>
+            <p>{rows.data ? `${rows.data.length} наблюдений` : "Торговые наблюдения"}</p>
           </div>
           <div className="journal-actions">
-            <button
-              className="secondary-button icon-button"
-              title="Настройки расчётов"
-              aria-label="Настройки расчётов"
+            <IconButton
+              label="Настройки расчётов"
+              className="header-icon-button"
               onClick={() => setSettingsOpen(true)}
             >
               <Settings2 size={16} />
-            </button>
-            <button
-              className="secondary-button button-with-icon"
+            </IconButton>
+            <Button
+              icon={<Plus size={16} />}
               onClick={() => addRow.mutate()}
               disabled={!columns.data?.length}
+              loading={addRow.isPending}
             >
-              <Plus size={16} />
-              Строка
-            </button>
-            <button
-              className="primary-button button-with-icon"
+              Наблюдение
+            </Button>
+            <Button
+              variant="primary"
+              icon={<Plus size={16} />}
               onClick={() => setEditing(null)}
             >
-              <Plus size={16} />
               Колонка
-            </button>
+            </Button>
           </div>
         </div>
         <div className="journal-tabs" role="tablist" aria-label="Раздел журнала">
@@ -255,22 +256,12 @@ export function JournalPage() {
           </button>
         </div>
         {view === "analytics" && <JournalAnalytics journalId={id} />}
-        {view === "journal" && columns.isPending && <div className="list-status">Загрузка…</div>}
+        {view === "journal" && columns.isPending && <StateView kind="loading" title="Загружаем журнал" compact />}
         {view === "journal" && columns.isError && (
-          <div className="list-status error">Не удалось загрузить колонки</div>
+          <StateView kind="error" title="Не удалось загрузить структуру журнала" description="Обновите страницу и повторите попытку." compact />
         )}
         {view === "journal" && columns.data?.length === 0 && (
-          <div className="empty-state journal-empty">
-            <button
-              className="empty-mark"
-              onClick={() => setEditing(null)}
-              aria-label="Добавить колонку"
-            >
-              <Plus size={20} />
-            </button>
-            <h2>Настройте структуру журнала</h2>
-            <p>Добавьте характеристики, которые хотите фиксировать.</p>
-          </div>
+          <div className="journal-empty"><StateView kind="empty" title="Настройте структуру журнала" description="Добавьте колонки для даты, результата, риска, RR, заметок или скриншотов." action={<Button variant="primary" icon={<Plus size={16}/>} onClick={() => setEditing(null)}>Добавить колонку</Button>} /></div>
         )}
         {view === "journal" && !!columns.data?.length && (
           <div className="table-shell">
@@ -372,18 +363,19 @@ export function JournalPage() {
                     ))}
                   </tr>
                 ))}
+                {rows.isPending && (
+                  <tr><td className="empty-table-message" colSpan={columns.data.length + 1}><span className="table-status"><span className="ui-spinner" />Загружаем наблюдения</span></td></tr>
+                )}
+                {rows.isError && (
+                  <tr><td className="empty-table-message table-error" colSpan={columns.data.length + 1}>Не удалось загрузить наблюдения</td></tr>
+                )}
                 {rows.data?.length === 0 && (
                   <tr>
                     <td
                       className="empty-table-message"
                       colSpan={columns.data.length + 1}
                     >
-                      <button
-                        className="text-button"
-                        onClick={() => addRow.mutate()}
-                      >
-                        Добавить первую строку
-                      </button>
+                      <div className="empty-table-content"><strong>В журнале пока нет наблюдений</strong><span>Добавьте первую строку и заполните данные сделки.</span><Button icon={<Plus size={15}/>} onClick={() => addRow.mutate()}>Добавить наблюдение</Button></div>
                     </td>
                   </tr>
                 )}
@@ -484,10 +476,15 @@ function CellEditor({
   onImageLeave: () => void;
   onImagePin: (image: Attachment) => void;
 }) {
+  const valueTone = column.role === "trade_result" && typeof value === "string"
+    ? ` result-${value.toLowerCase()}`
+    : (column.role === "pnl" && typeof value === "number")
+      ? value > 0 ? " value-positive" : value < 0 ? " value-negative" : ""
+      : "";
   if (column.type === "select")
     return (
       <select
-        className="cell-input"
+        className={`cell-input${valueTone}`}
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onSave(e.target.value || null)}
       >
@@ -529,7 +526,7 @@ function CellEditor({
   const input = (
     <input
       key={String(value)}
-      className="cell-input"
+      className={`cell-input${valueTone}`}
       type={type}
       min={column.role === "risk" || column.role === "r" ? 0.01 : undefined}
       max={column.role === "risk" ? 100 : undefined}
