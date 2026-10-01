@@ -21,7 +21,7 @@ services:
       context: ./backend
     environment:
       APP_ENV: production
-      HTTP_ADDRESS: :8080
+      PORT: 8080
       DATABASE_URL: postgres://${POSTGRES_USER:-trade_diary}:${POSTGRES_PASSWORD:-trade_diary}@postgres:5432/${POSTGRES_DB:-trade_diary}?sslmode=disable
       FRONTEND_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
       UPLOAD_DIRECTORY: /data/uploads
