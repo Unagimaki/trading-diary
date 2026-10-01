@@ -14,13 +14,13 @@ import (
 	"github.com/trade-diary/backend/internal/domain/observation"
 )
 
-func NewRouter(logger *slog.Logger, frontendOrigin string, authService *auth.Service, journalService *journal.Service, columnService *column.Service, observationService *observation.Service, attachmentService *attachment.Service, analyticsService *analytics.Service) http.Handler {
+func NewRouter(logger *slog.Logger, frontendOrigin string, environment string, authService *auth.Service, journalService *journal.Service, columnService *column.Service, observationService *observation.Service, attachmentService *attachment.Service, analyticsService *analytics.Service) http.Handler {
 	router := mux.NewRouter()
 	metrics := &requestMetrics{}
 	router.Use(observability(logger, metrics))
 	router.HandleFunc("/health", health).Methods(http.MethodGet)
 	router.Handle("/metrics", metrics).Methods(http.MethodGet)
-	handler := authHandler{service: authService}
+	handler := authHandler{service: authService, production: environment == "production"}
 	router.HandleFunc("/auth/register", handler.register).Methods(http.MethodPost)
 	router.HandleFunc("/auth/login", handler.login).Methods(http.MethodPost)
 	router.HandleFunc("/auth/logout", handler.logout).Methods(http.MethodPost)
@@ -62,8 +62,10 @@ func health(w http.ResponseWriter, _ *http.Request) {
 func cors(origin string) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			if origin != "" && origin != "*" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 			if r.Method == http.MethodOptions {

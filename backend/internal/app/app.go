@@ -51,7 +51,7 @@ func (a *App) Run(ctx context.Context) error {
 
 	server := &http.Server{
 		Addr:              a.config.HTTPAddress,
-		Handler:           httptransport.NewRouter(a.logger, a.config.FrontendOrigin, authService, journalService, columnService, observationService, attachmentService, analyticsService),
+		Handler:           httptransport.NewRouter(a.logger, a.config.FrontendOrigin, a.config.Environment, authService, journalService, columnService, observationService, attachmentService, analyticsService),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,

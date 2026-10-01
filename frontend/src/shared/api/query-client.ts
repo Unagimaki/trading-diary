@@ -1,5 +1,5 @@
 import { MutationCache, QueryClient } from "@tanstack/react-query";
-import { errorMessage, errorRequestId } from "./api-error";
+import { ApiError, errorMessage, errorRequestId } from "./api-error";
 import { useNotificationStore } from "@/shared/model/notification-store";
 
 export const queryClient = new QueryClient({
@@ -10,6 +10,10 @@ export const queryClient = new QueryClient({
         .show(errorMessage(error), errorRequestId(error)),
   }),
   defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1 },
+    queries: {
+      staleTime: 30_000,
+      retry: (failureCount, error) =>
+        !(error instanceof ApiError && error.status === 401) && failureCount < 1,
+    },
   },
 });

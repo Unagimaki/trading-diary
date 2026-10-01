@@ -16,7 +16,19 @@ import (
 
 const sessionCookie = "trade_diary_session"
 
-type authHandler struct{ service *auth.Service }
+type authHandler struct {
+	service    *auth.Service
+	production bool
+}
+
+func (h authHandler) cookie(value string) *http.Cookie {
+	sameSite := http.SameSiteLaxMode
+	if h.production {
+		sameSite = http.SameSiteNoneMode
+	}
+	return &http.Cookie{Name: sessionCookie, Value: value, Path: "/", HttpOnly: true, Secure: h.production, SameSite: sameSite}
+}
+
 type credentials struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
@@ -67,7 +79,9 @@ func (h authHandler) logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	cookie := h.cookie("")
+	cookie.MaxAge = -1
+	http.SetCookie(w, cookie)
 	w.WriteHeader(http.StatusNoContent)
 }
 func (h authHandler) startSession(w http.ResponseWriter, r *http.Request, u auth.User) bool {
@@ -82,7 +96,9 @@ func (h authHandler) startSession(w http.ResponseWriter, r *http.Request, u auth
 		internalError(w, r, "auth.create_session", err, "user_id", u.ID)
 		return false
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", Expires: expires, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	cookie := h.cookie(token)
+	cookie.Expires = expires
+	http.SetCookie(w, cookie)
 	return true
 }
 func cookieHash(r *http.Request) (string, bool) {

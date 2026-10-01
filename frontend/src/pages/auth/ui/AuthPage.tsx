@@ -23,7 +23,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     mutation.mutate({ name, email, password });
   };
 
-  if (queryClient.getQueryData(["current-user"]))
+  if (queryClient.getQueryState(["current-user"])?.status === "success")
     return <Navigate to="/" replace />;
 
   return (
