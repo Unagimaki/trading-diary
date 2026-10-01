@@ -18,7 +18,6 @@ func NewRouter(logger *slog.Logger, frontendOrigin string, authService *auth.Ser
 	router := mux.NewRouter()
 	metrics := &requestMetrics{}
 	router.Use(observability(logger, metrics))
-	router.Use(cors(frontendOrigin))
 	router.HandleFunc("/health", health).Methods(http.MethodGet)
 	router.Handle("/metrics", metrics).Methods(http.MethodGet)
 	handler := authHandler{service: authService}
@@ -51,7 +50,7 @@ func NewRouter(logger *slog.Logger, frontendOrigin string, authService *auth.Ser
 	analyticsHandler := analyticsHandler{auth: authService, analytics: analyticsService}
 	router.HandleFunc("/journals/{journalID}/analytics", analyticsHandler.get).Methods(http.MethodGet)
 
-	return router
+	return cors(frontendOrigin)(router)
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {
