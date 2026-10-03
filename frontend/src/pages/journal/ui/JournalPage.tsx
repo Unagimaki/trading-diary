@@ -33,6 +33,8 @@ import type { DataWarning } from "@/entities/observation/api/rows";
 import { queryClient } from "@/shared/api/query-client";
 import { errorMessage, errorRequestId } from "@/shared/api/api-error";
 import { JournalAnalytics } from "@/widgets/journal-analytics";
+import { TableAppearance } from "@/widgets/table-appearance";
+import { TextCell } from "./TextCell";
 import { Button, IconButton, StateView } from "@/shared/ui";
 
 const typeLabels: Record<ColumnType, string> = {
@@ -73,6 +75,7 @@ export function JournalPage() {
   );
   const [deleting, setDeleting] = useState<JournalColumn | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [wrapText, setWrapText] = useState(false);
   const [hoveredImage, setHoveredImage] = useState<Attachment | null>(null);
   const [pinnedImage, setPinnedImage] = useState<Attachment | null>(null);
   const [previewSize, setPreviewSize] = useState(25);
@@ -264,6 +267,8 @@ export function JournalPage() {
           <div className="journal-empty"><StateView kind="empty" title="Настройте структуру журнала" description="Добавьте колонки для даты, результата, риска, RR, заметок или скриншотов." action={<Button variant="primary" icon={<Plus size={16}/>} onClick={() => setEditing(null)}>Добавить колонку</Button>} /></div>
         )}
         {view === "journal" && !!columns.data?.length && (
+          <>
+          <TableAppearance wrapText={wrapText} onWrapTextChange={setWrapText} />
           <div className="table-shell">
             <table className="journal-table">
               <thead>
@@ -346,6 +351,7 @@ export function JournalPage() {
                           journalId={id}
                           rowId={row.id}
                           column={item}
+                          wrapText={wrapText}
                           value={row.values[item.id]}
                           onRefresh={refreshRows}
                           onImageEnter={showHoveredImage}
@@ -382,6 +388,7 @@ export function JournalPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
       {(hoveredImage || pinnedImage) && (
@@ -459,6 +466,7 @@ function CellEditor({
   journalId,
   rowId,
   column,
+  wrapText,
   value,
   onSave,
   onRefresh,
@@ -469,6 +477,7 @@ function CellEditor({
   journalId: string;
   rowId: string;
   column: JournalColumn;
+  wrapText: boolean;
   value: unknown;
   onSave: (value: unknown) => void;
   onRefresh: () => Promise<unknown>;
@@ -517,6 +526,8 @@ function CellEditor({
         onImagePin={onImagePin}
       />
     );
+  if (column.type === "text")
+    return <TextCell value={value} wrapText={wrapText} onSave={onSave} />;
   const type =
     column.type === "number"
       ? "number"

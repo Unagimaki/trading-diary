@@ -146,6 +146,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .journal-tabs button.active { border-bottom-color: var(--accent); color: var(--text); }
 .journal-empty { margin: 22px auto 0; max-width: 1480px; }
 .table-shell { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin: 0 auto; max-width: 1480px; min-height: 360px; overflow: auto; }
+.table-appearance { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 auto 12px; max-width: 1480px; }
+.table-appearance button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .journal-table { border-collapse: separate; border-spacing: 0; min-width: 100%; table-layout: fixed; }
 .journal-table th, .journal-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); height: 52px; min-width: 205px; padding: 0; text-align: left; }
 .journal-table th:last-child, .journal-table td:last-child { border-right: 0; }
@@ -166,6 +168,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .column-tools button:last-child:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
 .column-tools button:disabled { opacity: .25; }
 .cell-input { background: transparent; border: 0; color: var(--text); font-size: 12px; height: 51px; outline: none; padding: 0 11px; transition: background var(--transition), box-shadow var(--transition); width: 100%; }
+.text-cell { display: block; line-height: 19px; min-height: 51px; overflow: hidden; overflow-wrap: anywhere; padding: 16px 11px; resize: none; }
 select.cell-input { cursor: pointer; padding-right: 30px; }
 .cell-input:hover { background: rgba(37,99,235,.025); }
 .cell-input:focus { background: var(--surface); box-shadow: inset 0 0 0 2px var(--accent); }
