@@ -526,7 +526,11 @@ function CellEditor({
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onSave(e.target.value || null)}
       >
-        <option value="">—</option>
+        {column.role === "trade_result" ? (
+          <option value="" disabled hidden>Выберите результат</option>
+        ) : (
+          <option value="">—</option>
+        )}
         {column.options.map((option) => (
           <option key={option}>{option}</option>
         ))}
