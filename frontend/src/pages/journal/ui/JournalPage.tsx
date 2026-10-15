@@ -35,6 +35,7 @@ import { errorMessage, errorRequestId } from "@/shared/api/api-error";
 import { JournalAnalytics } from "@/widgets/journal-analytics";
 import { TableAppearance } from "@/widgets/table-appearance";
 import { TextCell } from "./TextCell";
+import { MobileImageViewer } from "./MobileImageViewer";
 import { Button, IconButton, StateView } from "@/shared/ui";
 
 const typeLabels: Record<ColumnType, string> = {
@@ -78,6 +79,8 @@ export function JournalPage() {
   const [wrapText, setWrapText] = useState(false);
   const [hoveredImage, setHoveredImage] = useState<Attachment | null>(null);
   const [pinnedImage, setPinnedImage] = useState<Attachment | null>(null);
+  const [mobileImages, setMobileImages] = useState<Attachment[]>([]);
+  const [comparisonImage, setComparisonImage] = useState<Attachment | null>(null);
   const [previewSize, setPreviewSize] = useState(25);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const journal = useQuery({
@@ -185,6 +188,7 @@ export function JournalPage() {
     };
   }, []);
   const showHoveredImage = (image: Attachment) => {
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     setHoveredImage(image);
   };
@@ -197,6 +201,15 @@ export function JournalPage() {
   };
   const resizePreview = (change: number) =>
     setPreviewSize((size) => Math.min(42, Math.max(18, size + change)));
+  const openImage = (image: Attachment) => {
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      setPinnedImage(image);
+      return;
+    }
+    setHoveredImage(null);
+    setMobileImages(comparisonImage && comparisonImage.id !== image.id ? [comparisonImage, image] : [image]);
+    setComparisonImage(null);
+  };
   if (journal.isError) return <Navigate to="/" replace />;
   return (
     <main className="workspace">
@@ -356,7 +369,7 @@ export function JournalPage() {
                           onRefresh={refreshRows}
                           onImageEnter={showHoveredImage}
                           onImageLeave={hideHoveredImage}
-                          onImagePin={setPinnedImage}
+                          onImagePin={openImage}
                           onSave={(value) =>
                             saveCell.mutate({
                               rowId: row.id,
@@ -391,6 +404,22 @@ export function JournalPage() {
           </>
         )}
       </section>
+      {comparisonImage && (
+        <div className="image-comparison-prompt" role="status">
+          <span>Выберите второй скриншот в таблице для сравнения</span>
+          <Button onClick={() => setComparisonImage(null)}>Отмена</Button>
+        </div>
+      )}
+      {mobileImages.length > 0 && (
+        <MobileImageViewer
+          images={mobileImages}
+          onClose={() => setMobileImages([])}
+          onCompare={(image) => {
+            setComparisonImage(image);
+            setMobileImages([]);
+          }}
+        />
+      )}
       {(hoveredImage || pinnedImage) && (
         <div
           className={`image-preview-dock${hoveredImage && pinnedImage && hoveredImage.id !== pinnedImage.id ? " comparing" : ""}`}

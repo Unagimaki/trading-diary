@@ -307,6 +307,26 @@ select.cell-input { cursor: pointer; padding-right: 30px; }
   .topbar { height: 44px; padding: 0 16px; position: static; }
 }
 
+.image-comparison-prompt { align-items: center; background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius); bottom: 12px; box-shadow: var(--shadow-md); display: flex; font-size: 12px; gap: 12px; left: 12px; padding: 10px; position: fixed; right: 12px; z-index: 21; }
+.mobile-image-viewer { background: var(--surface); border: 0; color: var(--text); height: 100dvh; inset: 0; margin: 0; max-height: none; max-width: none; padding: 0; width: 100%; }
+.mobile-image-viewer[open] { display: flex; flex-direction: column; }
+.mobile-image-viewer::backdrop { background: rgba(0,0,0,.7); }
+.mobile-image-viewer-header, .mobile-image-viewer-footer { align-items: center; display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 8px 12px; }
+.mobile-image-viewer-header h2 { font-size: 14px; margin: 0; }
+.mobile-image-viewer-footer { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.mobile-image-viewer .ui-icon-button { height: 44px; min-width: 44px; }
+.mobile-image-panels { display: grid; flex: 1; min-height: 0; }
+.mobile-image-panels.comparing { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+.mobile-image-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.mobile-image-panel-tools { align-items: center; display: flex; gap: 4px; padding: 0 8px; }
+.mobile-image-panel-tools > span { flex: 1; font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-image-scroll { background: #18191c; flex: 1; min-height: 0; overflow: auto; touch-action: pan-x pan-y; }
+.mobile-image-canvas { min-height: 100%; min-width: 100%; }
+.mobile-image-canvas img { display: block; height: 100%; object-fit: contain; width: 100%; }
+@media (orientation: landscape) {
+  .mobile-image-panels.comparing { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
