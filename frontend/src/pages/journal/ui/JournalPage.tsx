@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -82,6 +82,12 @@ export function JournalPage() {
   const [mobileImages, setMobileImages] = useState<Attachment[]>([]);
   const [comparisonImage, setComparisonImage] = useState<Attachment | null>(null);
   const [previewSize, setPreviewSize] = useState(25);
+  const pendingRows = useMutationState({
+    filters: { mutationKey: ["row-write", id], status: "pending" },
+    select: (mutation) => String(mutation.options.mutationKey?.[2] ??
+      (typeof mutation.state.variables === "string" ? mutation.state.variables :
+        (mutation.state.variables as { rowId: string }).rowId)),
+  });
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const journal = useQuery({
     queryKey: ["journal", id],
@@ -150,10 +156,12 @@ export function JournalPage() {
     onSuccess: refreshRows,
   });
   const deleteRow = useMutation({
+    mutationKey: ["row-write", id],
     mutationFn: (rowId: string) => rowsApi.remove(id, rowId),
     onSuccess: refreshRows,
   });
   const saveCell = useMutation({
+    mutationKey: ["row-write", id],
     mutationFn: ({
       rowId,
       columnId,
@@ -284,7 +292,7 @@ export function JournalPage() {
           <TableAppearance wrapText={wrapText} onWrapTextChange={setWrapText} />
           <div className="table-shell">
             <table className="journal-table">
-              <thead>
+              <thead inert={move.isPending} aria-busy={move.isPending}>
                 <tr>
                   <th className="row-number">#</th>
                   {columns.data.map((item, index) => (
@@ -294,7 +302,7 @@ export function JournalPage() {
                           className="column-name"
                           onClick={() => setEditing(item)}
                         >
-                          <span>{item.name}</span>
+                          <span>{move.isPending && move.variables?.item.id === item.id ? <span className="ui-spinner" aria-label="Перемещение колонки" /> : item.name}</span>
                           <small>
                             {typeLabels[item.type]}
                             {item.role ? ` · ${roleLabels[item.role]}` : ""}
@@ -303,7 +311,7 @@ export function JournalPage() {
                         <div className="column-tools">
                           <button
                             title="Переместить влево"
-                            disabled={index === 0}
+                            disabled={index === 0 || move.isPending}
                             onClick={() =>
                               move.mutate({ item, position: index - 1 })
                             }
@@ -312,7 +320,7 @@ export function JournalPage() {
                           </button>
                           <button
                             title="Переместить вправо"
-                            disabled={index === columns.data.length - 1}
+                            disabled={index === columns.data.length - 1 || move.isPending}
                             onClick={() =>
                               move.mutate({ item, position: index + 1 })
                             }
@@ -339,9 +347,9 @@ export function JournalPage() {
               </thead>
               <tbody>
                 {rows.data?.map((row, index) => (
-                  <tr key={row.id} className={row.warnings?.length ? "row-warning" : undefined}>
+                  <tr key={row.id} inert={pendingRows.includes(row.id)} aria-busy={pendingRows.includes(row.id)} className={row.warnings?.length ? "row-warning" : undefined}>
                     <td className="row-number row-control">
-                      <span>{index + 1}</span>
+                      <span>{pendingRows.includes(row.id) ? <span className="ui-spinner" role="status" aria-label="Обработка строки" /> : index + 1}</span>
                       {!!row.warnings?.length && (
                         <TriangleAlert
                           className="row-warning-icon"
@@ -353,9 +361,10 @@ export function JournalPage() {
                       )}
                       <button
                         title="Удалить строку"
+                        disabled={pendingRows.includes(row.id)}
                         onClick={() => deleteRow.mutate(row.id)}
                       >
-                        <Trash2 size={13} />
+                        {pendingRows.includes(row.id) ? <span className="ui-spinner" /> : <Trash2 size={13} />}
                       </button>
                     </td>
                     {columns.data.map((item) => (
@@ -394,7 +403,7 @@ export function JournalPage() {
                       className="empty-table-message"
                       colSpan={columns.data.length + 1}
                     >
-                      <div className="empty-table-content"><strong>В журнале пока нет наблюдений</strong><span>Добавьте первую строку и заполните данные сделки.</span><Button icon={<Plus size={15}/>} onClick={() => addRow.mutate()}>Добавить наблюдение</Button></div>
+                      <div className="empty-table-content"><strong>В журнале пока нет наблюдений</strong><span>Добавьте первую строку и заполните данные сделки.</span><Button loading={addRow.isPending} icon={<Plus size={15}/>} onClick={() => addRow.mutate()}>Добавить наблюдение</Button></div>
                     </td>
                   </tr>
                 )}
@@ -453,7 +462,7 @@ export function JournalPage() {
         <ColumnDialog
           column={editing}
           pending={save.isPending}
-          onClose={() => setEditing(undefined)}
+          onClose={() => { if (!save.isPending) setEditing(undefined); }}
           onSave={(values) => save.mutate(values)}
         />
       )}{" "}
@@ -461,7 +470,7 @@ export function JournalPage() {
         <JournalSettingsDialog
           journal={journal.data}
           pending={saveSettings.isPending}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => { if (!saveSettings.isPending) setSettingsOpen(false); }}
           onSave={(initialDeposit, riskPercent, defaultRR) => saveSettings.mutate({ initialDeposit, riskPercent, defaultRR })}
         />
       )}
@@ -473,15 +482,17 @@ export function JournalPage() {
             <div className="dialog-actions">
               <button
                 className="secondary-button"
+                disabled={remove.isPending}
                 onClick={() => setDeleting(null)}
               >
                 Отмена
               </button>
               <button
                 className="danger-button"
+                disabled={remove.isPending}
                 onClick={() => remove.mutate(deleting.id)}
               >
-                Удалить
+                {remove.isPending ? <><span className="ui-spinner" /> Удаление…</> : "Удалить"}
               </button>
             </div>
           </div>
@@ -623,17 +634,19 @@ function ImageCell({
       ? (value as Attachment)
       : null;
   const upload = useMutation({
+    mutationKey: ["row-write", journalId, rowId],
     mutationFn: (file: File) =>
       attachmentsApi.upload(journalId, rowId, columnId, file),
     onSuccess: onRefresh,
   });
   const remove = useMutation({
+    mutationKey: ["row-write", journalId, rowId],
     mutationFn: () => attachmentsApi.remove(journalId, rowId, columnId),
     onSuccess: onRefresh,
   });
   if (current)
     return (
-      <div className="image-cell">
+      <div className="image-cell" aria-busy={remove.isPending}>
         <button
           className="image-thumbnail"
           type="button"
@@ -656,8 +669,8 @@ function ImageCell({
         >
           <ExternalLink size={14} />
         </a>
-        <button title="Удалить" onClick={() => remove.mutate()}>
-          <X size={14} />
+        <button aria-label="Удалить изображение" title={remove.isPending ? "Удаление…" : "Удалить"} disabled={remove.isPending} onClick={() => remove.mutate()}>
+          {remove.isPending ? <span className="ui-spinner" /> : <X size={14} />}
         </button>
       </div>
     );
@@ -792,7 +805,7 @@ function JournalSettingsDialog({
   return (
     <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="dialog journal-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="journal-settings-title">
-        <form onSubmit={(event) => { event.preventDefault(); if (valid) onSave(deposit, risk, rr); }}>
+        <form inert={pending} aria-busy={pending} onSubmit={(event) => { event.preventDefault(); if (valid && !pending) onSave(deposit, risk, rr); }}>
           <h2 id="journal-settings-title">Настройки расчётов</h2>
           <p>Эти значения используются, когда в строке не указан индивидуальный риск.</p>
           <label>
@@ -813,7 +826,7 @@ function JournalSettingsDialog({
           </div>
           <div className="dialog-actions">
             <button type="button" className="secondary-button" onClick={onClose}>Отмена</button>
-            <button className="primary-button" disabled={pending || !valid}>Сохранить</button>
+            <button className="primary-button" disabled={pending || !valid}>{pending ? <><span className="ui-spinner" /> Сохранение…</> : "Сохранить"}</button>
           </div>
         </form>
       </div>
@@ -843,6 +856,7 @@ function ColumnDialog({
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (pending) return;
     onSave({
       name,
       type,
@@ -856,7 +870,7 @@ function ColumnDialog({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="dialog column-dialog" role="dialog" aria-modal="true">
-        <form onSubmit={submit}>
+        <form inert={pending} aria-busy={pending} onSubmit={submit}>
           <h2>{column ? "Настройка колонки" : "Новая колонка"}</h2>
           <label>
             Название
@@ -926,7 +940,7 @@ function ColumnDialog({
               className="primary-button"
               disabled={pending || !name.trim()}
             >
-              Сохранить
+              {pending ? <><span className="ui-spinner" /> Сохранение…</> : "Сохранить"}
             </button>
           </div>
         </form>

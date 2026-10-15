@@ -155,6 +155,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .journal-table thead { position: sticky; top: 0; z-index: 3; }
 .journal-table th { background: #fafafa; }
 .journal-table tbody tr { transition: background var(--transition); }
+.journal-table [aria-busy="true"] { opacity: .6; }
 .journal-table tbody tr:hover td { background: #fafcff; }
 .journal-table .row-number { background: #fafafa; color: var(--text-tertiary); font-size: 10px; min-width: 46px; text-align: center; width: 46px; }
 .column-header { align-items: center; display: flex; height: 58px; padding: 0 6px 0 11px; }

@@ -20,6 +20,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (mutation.isPending) return;
     mutation.mutate({ name, email, password });
   };
 
@@ -29,7 +30,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   return (
     <main className="auth-page">
       <div className="auth-brand">Trade Diary</div>
-      <form className="auth-form" onSubmit={submit}>
+      <form className="auth-form" inert={mutation.isPending} aria-busy={mutation.isPending} onSubmit={submit}>
         <h1>{mode === "login" ? "Вход" : "Создать аккаунт"}</h1>
         <p>
           {mode === "login"
