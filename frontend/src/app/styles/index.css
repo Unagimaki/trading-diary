@@ -303,6 +303,10 @@ select.cell-input { cursor: pointer; padding-right: 30px; }
   .equity-tooltip { display: none; }
 }
 
+@media (max-width: 760px), (orientation: landscape) and (max-height: 500px) {
+  .topbar { height: 44px; padding: 0 16px; position: static; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
