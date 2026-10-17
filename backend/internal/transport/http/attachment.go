@@ -64,6 +64,7 @@ func (h attachmentHandler) upload(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, "attachment.upload", err, "user_id", u.ID, "journal_id", v["journalID"], "row_id", v["rowID"], "column_id", v["columnID"])
 		return
 	}
+	addRequestAttrs(r, "attachment_id", item.ID, "file_size_bytes", item.Size, "mime_type", item.MimeType)
 	writeJSON(w, 201, item)
 }
 func (h attachmentHandler) content(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +87,14 @@ func (h attachmentHandler) content(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", fmt.Sprint(item.Size))
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": item.Name}))
 	w.Header().Set("Cache-Control", "private, max-age=3600")
-	_, _ = io.Copy(w, reader)
+	if _, err := io.Copy(w, reader); err != nil {
+		if recorder, ok := w.(*responseRecorder); ok {
+			recorder.failed = true
+			recorder.errorCode = "RESPONSE_STREAM_FAILED"
+			recorder.errorMessage = "image transfer interrupted"
+		}
+		requestLogger(r).ErrorContext(r.Context(), "Передача скриншота прервана", "event", "attachment.stream_failed", "attachment_id", item.ID, "error", err)
+	}
 }
 func (h attachmentHandler) delete(w http.ResponseWriter, r *http.Request) {
 	u, ok := authenticatedUser(w, r, h.auth)

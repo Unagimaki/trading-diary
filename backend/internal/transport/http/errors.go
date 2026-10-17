@@ -9,6 +9,10 @@ type errorResponse struct {
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
+	if recorder, ok := w.(*responseRecorder); ok {
+		recorder.errorCode = errorCode(status, message)
+		recorder.errorMessage = message
+	}
 	writeJSON(w, status, errorResponse{
 		Code:      errorCode(status, message),
 		Message:   message,

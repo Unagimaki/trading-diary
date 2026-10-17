@@ -32,6 +32,7 @@ func (h columnHandler) list(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, "column.list", err, "user_id", u.ID, "journal_id", mux.Vars(r)["journalID"])
 		return
 	}
+	addRequestAttrs(r, "result_count", len(items))
 	writeJSON(w, 200, items)
 }
 func (h columnHandler) create(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +99,9 @@ func (h columnHandler) respond(w http.ResponseWriter, r *http.Request, item colu
 	if err != nil {
 		internalError(w, r, "column.write", err, "journal_id", mux.Vars(r)["journalID"], "column_id", mux.Vars(r)["id"])
 		return
+	}
+	if status == http.StatusCreated {
+		addRequestAttrs(r, "column_id", item.ID)
 	}
 	writeJSON(w, status, item)
 }

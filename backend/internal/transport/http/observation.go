@@ -27,6 +27,7 @@ func (h observationHandler) list(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, "row.list", err, "user_id", u.ID, "journal_id", mux.Vars(r)["journalID"])
 		return
 	}
+	addRequestAttrs(r, "result_count", len(items))
 	writeJSON(w, 200, items)
 }
 func (h observationHandler) create(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +44,7 @@ func (h observationHandler) create(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, "row.create", err, "user_id", u.ID, "journal_id", mux.Vars(r)["journalID"])
 		return
 	}
+	addRequestAttrs(r, "row_id", item.ID)
 	writeJSON(w, 201, item)
 }
 func (h observationHandler) delete(w http.ResponseWriter, r *http.Request) {

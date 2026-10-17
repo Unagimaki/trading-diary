@@ -74,6 +74,12 @@ func (h authHandler) me(w http.ResponseWriter, r *http.Request) {
 }
 func (h authHandler) logout(w http.ResponseWriter, r *http.Request) {
 	if token, ok := cookieHash(r); ok {
+		// Identify the session before deleting it, without changing logout's idempotent behavior.
+		if user, err := h.service.CurrentUser(r.Context(), token); err == nil {
+			setRequestUser(r, user.ID)
+		} else if !errors.Is(err, auth.ErrInvalidCredentials) {
+			requestLogger(r).WarnContext(r.Context(), "Не удалось определить пользователя при выходе", "event", "auth.logout.lookup_failed", "error", err)
+		}
 		if err := h.service.Logout(r.Context(), token); err != nil {
 			internalError(w, r, "auth.logout", err)
 			return
@@ -85,6 +91,7 @@ func (h authHandler) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 func (h authHandler) startSession(w http.ResponseWriter, r *http.Request, u auth.User) bool {
+	setRequestUser(r, u.ID)
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		internalError(w, r, "auth.session_token", err, "user_id", u.ID)
@@ -123,6 +130,7 @@ func authenticatedUser(w http.ResponseWriter, r *http.Request, service *auth.Ser
 		internalError(w, r, "auth.current_user", err)
 		return auth.User{}, false
 	}
+	setRequestUser(r, user.ID)
 	return user, true
 }
 func hashToken(token string) string {

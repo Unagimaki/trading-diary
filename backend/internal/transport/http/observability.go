@@ -16,11 +16,24 @@ type contextKey string
 
 const loggerKey contextKey = "request_logger"
 
+type requestLogContext struct {
+	logger    *slog.Logger
+	userID    string
+	operation string
+	route     string
+	attrs     []any
+}
+
 type responseRecorder struct {
 	http.ResponseWriter
-	status int
-	bytes  int
+	status       int
+	bytes        int
+	errorCode    string
+	errorMessage string
+	failed       bool
 }
+
+func (w *responseRecorder) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 type requestMetrics struct {
 	requests   atomic.Uint64
@@ -58,18 +71,28 @@ func observability(logger *slog.Logger, metrics *requestMetrics) func(http.Handl
 			started := time.Now()
 			metrics.inFlight.Add(1)
 			requestID := r.Header.Get("X-Request-ID")
-			if requestID == "" {
+			if !validRequestID(requestID) {
 				requestID = newRequestID()
 			}
 			requestLogger := logger.With("request_id", requestID, "method", r.Method, "path", r.URL.Path)
-			ctx := context.WithValue(r.Context(), loggerKey, requestLogger)
+			info := &requestLogContext{logger: requestLogger, operation: "http.unmatched"}
+			if r.Method == http.MethodOptions {
+				info.operation = "http.preflight"
+			}
+			ctx := context.WithValue(r.Context(), loggerKey, info)
+			r = r.WithContext(ctx)
 			w.Header().Set("X-Request-ID", requestID)
 			recorder := &responseRecorder{ResponseWriter: w}
+			quiet := r.URL.Path == "/health" || r.URL.Path == "/metrics"
+			if !quiet {
+				requestLogger.InfoContext(ctx, "Получен HTTP-запрос", "event", "http.request.started", "user_id", "")
+			}
 
 			defer func() {
 				if recovered := recover(); recovered != nil {
+					recorder.failed = true
 					metrics.panics.Add(1)
-					requestLogger.Error("request panic", "panic", recovered, "stack", string(debug.Stack()))
+					requestLogger.With("user_id", info.userID).ErrorContext(ctx, "request panic", "event", "http.request.panicked", "operation", info.operation, "panic", recovered, "stack", string(debug.Stack()))
 					if recorder.status == 0 {
 						writeError(recorder, http.StatusInternalServerError, "internal error")
 					}
@@ -81,31 +104,56 @@ func observability(logger *slog.Logger, metrics *requestMetrics) func(http.Handl
 				metrics.inFlight.Add(-1)
 				metrics.requests.Add(1)
 				metrics.durationNS.Add(uint64(time.Since(started)))
-				if status >= 500 {
+				if status >= 500 || recorder.failed {
 					metrics.errors.Add(1)
 				}
-				if r.URL.Path != "/health" || status >= 400 {
-					requestLogger.LogAttrs(ctx, accessLevel(status), "request completed",
-						slog.Int("status", status), slog.Int("bytes", recorder.bytes), slog.Duration("duration", time.Since(started)))
+				if !quiet || status >= 400 || recorder.failed {
+					outcome, message := "success", operationMessage(info.operation)
+					if status >= 400 {
+						outcome, message = "rejected", "Запрос отклонён"
+					}
+					if status >= 500 || recorder.failed {
+						outcome, message = "failed", "Не удалось выполнить запрос"
+					}
+					args := []any{"event", "http.request.completed", "user_id", info.userID, "operation", info.operation,
+						"route", info.route, "outcome", outcome, "status", status, "bytes", recorder.bytes,
+						"duration_ms", float64(time.Since(started).Microseconds()) / 1000}
+					if recorder.errorCode != "" {
+						args = append(args, "error_code", recorder.errorCode, "reason", recorder.errorMessage)
+					}
+					args = append(args, info.attrs...)
+					level := accessLevel(status)
+					if recorder.failed {
+						level = slog.LevelError
+					}
+					requestLogger.Log(ctx, level, message, args...)
 				}
 			}()
 
-			next.ServeHTTP(recorder, r.WithContext(ctx))
+			next.ServeHTTP(recorder, r)
 		})
 	}
 }
 
 func requestLogger(r *http.Request) *slog.Logger {
-	if logger, ok := r.Context().Value(loggerKey).(*slog.Logger); ok {
-		return logger
+	if info, ok := r.Context().Value(loggerKey).(*requestLogContext); ok {
+		return info.logger.With("user_id", info.userID)
 	}
 	return slog.Default()
 }
 
 func internalError(w http.ResponseWriter, r *http.Request, operation string, err error, attrs ...any) {
-	args := []any{"operation", operation, "error", err}
-	args = append(args, attrs...)
-	requestLogger(r).ErrorContext(r.Context(), "request failed", args...)
+	args := []any{"event", "http.request.failed", "operation", operation, "error", err}
+	for i := 0; i+1 < len(attrs); i += 2 {
+		if attrs[i] == "user_id" {
+			if userID, ok := attrs[i+1].(string); ok {
+				setRequestUser(r, userID)
+			}
+			continue
+		}
+		args = append(args, attrs[i], attrs[i+1])
+	}
+	requestLogger(r).ErrorContext(r.Context(), "Внутренняя ошибка при выполнении операции", args...)
 	writeError(w, http.StatusInternalServerError, "internal error")
 }
 
@@ -115,6 +163,30 @@ func newRequestID() string {
 		return time.Now().UTC().Format("20060102T150405.000000000")
 	}
 	return hex.EncodeToString(value)
+}
+
+func setRequestUser(r *http.Request, userID string) {
+	if info, ok := r.Context().Value(loggerKey).(*requestLogContext); ok {
+		info.userID = userID
+	}
+}
+
+func addRequestAttrs(r *http.Request, attrs ...any) {
+	if info, ok := r.Context().Value(loggerKey).(*requestLogContext); ok {
+		info.attrs = append(info.attrs, attrs...)
+	}
+}
+
+func validRequestID(value string) bool {
+	if len(value) == 0 || len(value) > 128 {
+		return false
+	}
+	for _, c := range value {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 func accessLevel(status int) slog.Level {

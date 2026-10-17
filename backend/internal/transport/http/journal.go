@@ -34,6 +34,7 @@ func (h journalHandler) list(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, "journal.list", err, "user_id", u.ID)
 		return
 	}
+	addRequestAttrs(r, "result_count", len(items))
 	writeJSON(w, 200, items)
 }
 func (h journalHandler) get(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +116,9 @@ func (h journalHandler) respond(w http.ResponseWriter, r *http.Request, item jou
 	if err != nil {
 		internalError(w, r, "journal.write", err, "journal_id", mux.Vars(r)["id"])
 		return
+	}
+	if status == http.StatusCreated {
+		addRequestAttrs(r, "journal_id", item.ID)
 	}
 	writeJSON(w, status, item)
 }
