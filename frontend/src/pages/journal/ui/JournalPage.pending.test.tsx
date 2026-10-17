@@ -18,8 +18,9 @@ vi.mock("@/entities/observation/api/rows", () => ({ rowsApi: {
   list: vi.fn(), create: vi.fn(), remove: vi.fn(), setCell: vi.fn(),
 } }));
 vi.mock("@/entities/attachment/api/attachments", () => ({ attachmentsApi: {
-  remove: vi.fn(), contentUrl: () => "/image.png",
+  remove: vi.fn(), upload: vi.fn(), contentUrl: () => "/image.png",
 } }));
+vi.mock("@/widgets/journal-analytics", () => ({ JournalAnalytics: () => <div>Аналитика журнала</div> }));
 
 function deferred() {
   let resolve!: () => void;
@@ -46,6 +47,34 @@ describe("journal pending actions", () => {
     });
   });
   afterEach(() => { cleanup(); queryClient.clear(); vi.unstubAllGlobals(); });
+
+  it("keeps cells and analytics accessible while an image uploads, including after returning to the table", async () => {
+    const request = deferred();
+    vi.mocked(attachmentsApi.upload).mockImplementation(async () => { await request.promise; return {} as never; });
+    vi.mocked(columnsApi.list).mockResolvedValue([
+      { id: "c1", journalId: "j1", name: "Скриншот", type: "image", role: null, options: [], position: 0, createdAt: "", updatedAt: "" },
+      { id: "c2", journalId: "j1", name: "Заметка", type: "text", role: null, options: [], position: 1, createdAt: "", updatedAt: "" },
+    ]);
+    vi.mocked(rowsApi.list).mockResolvedValue([{ id: "r1", journalId: "j1", position: 0, warnings: [], createdAt: "", updatedAt: "", values: {} }]);
+    const { container } = renderPage();
+    await screen.findByRole("textbox");
+    const file = new File(["image"], "screen.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await waitFor(() => expect(container.querySelector('input[type="file"]')).toBeDisabled());
+    expect(screen.getByRole("textbox").closest("tr")).not.toHaveAttribute("inert");
+    expect(screen.getByTitle("Удалить строку")).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Заметка во время загрузки" } });
+    expect(screen.getByRole("textbox")).toHaveValue("Заметка во время загрузки");
+    fireEvent.click(screen.getByRole("tab", { name: "Аналитика" }));
+    expect(screen.getByText("Аналитика журнала")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Журнал" }));
+    expect(container.querySelector('input[type="file"]')).toBeDisabled();
+    expect(screen.getByText("Загрузка…")).toBeInTheDocument();
+    expect(attachmentsApi.upload).toHaveBeenCalledTimes(1);
+    await act(async () => request.resolve());
+    await waitFor(() => expect(container.querySelector('input[type="file"]')).toBeEnabled());
+    expect(screen.getByTitle("Удалить строку")).toBeEnabled();
+  });
 
   const cellCases = (["text", "number", "date"] as ColumnType[]).flatMap((type) =>
     [undefined, null, ""].map((value) => ({ type, value })),

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useMutation, useMutationState, useQuery } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useMutationState, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -87,6 +87,10 @@ export function JournalPage() {
     select: (mutation) => String(mutation.options.mutationKey?.[2] ??
       (typeof mutation.state.variables === "string" ? mutation.state.variables :
         (mutation.state.variables as { rowId: string }).rowId)),
+  });
+  const uploadingRows = useMutationState({
+    filters: { mutationKey: ["image-upload", id], status: "pending" },
+    select: (mutation) => String(mutation.options.mutationKey?.[2]),
   });
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const journal = useQuery({
@@ -361,7 +365,7 @@ export function JournalPage() {
                       )}
                       <button
                         title="Удалить строку"
-                        disabled={pendingRows.includes(row.id)}
+                        disabled={pendingRows.includes(row.id) || uploadingRows.includes(row.id)}
                         onClick={() => deleteRow.mutate(row.id)}
                       >
                         {pendingRows.includes(row.id) ? <span className="ui-spinner" /> : <Trash2 size={13} />}
@@ -635,11 +639,12 @@ function ImageCell({
       ? (value as Attachment)
       : null;
   const upload = useMutation({
-    mutationKey: ["row-write", journalId, rowId],
+    mutationKey: ["image-upload", journalId, rowId, columnId],
     mutationFn: (file: File) =>
       attachmentsApi.upload(journalId, rowId, columnId, file),
     onSuccess: onRefresh,
   });
+  const uploading = useIsMutating({ mutationKey: ["image-upload", journalId, rowId, columnId] }) > 0;
   const remove = useMutation({
     mutationKey: ["row-write", journalId, rowId],
     mutationFn: () => attachmentsApi.remove(journalId, rowId, columnId),
@@ -696,13 +701,13 @@ function ImageCell({
       </div>
     );
   return (
-    <label className="image-upload">
-      <ImagePlus size={15} />
-      <span>{upload.isPending ? "Загрузка…" : "Добавить"}</span>
+    <label className="image-upload" aria-busy={uploading}>
+      {uploading ? <span className="ui-spinner" /> : <ImagePlus size={15} />}
+      <span>{uploading ? "Загрузка…" : "Добавить"}</span>
       <input
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        disabled={upload.isPending}
+        disabled={uploading}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) {
