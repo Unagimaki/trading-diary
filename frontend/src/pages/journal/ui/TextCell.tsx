@@ -45,8 +45,9 @@ export function TextCell({ value, wrapText, onSave }: TextCellProps) {
       defaultValue={value == null ? "" : String(value)}
       onInput={resize}
       onBlur={(event) => {
-        const next = event.target.value || null;
-        if (next !== value) onSave(next);
+        const raw = event.target.value;
+        const initial = value == null ? "" : String(value);
+        if (raw !== initial) onSave(raw || null);
       }}
     />
   );

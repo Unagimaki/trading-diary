@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryClient } from "@/shared/api/query-client";
 import { rowsApi } from "@/entities/observation/api/rows";
 import { attachmentsApi } from "@/entities/attachment/api/attachments";
+import { columnsApi, type ColumnType } from "@/entities/column/api/columns";
 import { JournalPage } from "./JournalPage";
 
 vi.mock("@/entities/journal/api/journals", () => ({ journalsApi: {
@@ -38,8 +39,50 @@ describe("journal pending actions", () => {
     vi.clearAllMocks();
     queryClient.clear();
     vi.mocked(rowsApi.list).mockResolvedValue([]);
+    vi.mocked(columnsApi.list).mockResolvedValue([{ id: "c1", journalId: "j1", name: "Скриншот", type: "image", role: null, options: [], position: 0, createdAt: "", updatedAt: "" }]);
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      disconnect() {}
+    });
   });
-  afterEach(() => { cleanup(); queryClient.clear(); });
+  afterEach(() => { cleanup(); queryClient.clear(); vi.unstubAllGlobals(); });
+
+  const cellCases = (["text", "number", "date"] as ColumnType[]).flatMap((type) =>
+    [undefined, null, ""].map((value) => ({ type, value })),
+  );
+  it.each(cellCases)("does not save untouched empty $type cells with value $value", async ({ type, value }) => {
+    vi.mocked(columnsApi.list).mockResolvedValue([{ id: "c1", journalId: "j1", name: "Поле", type, role: null, options: [], position: 0, createdAt: "", updatedAt: "" }]);
+    vi.mocked(rowsApi.list).mockResolvedValue([{ id: "r1", journalId: "j1", position: 0, warnings: [], createdAt: "", updatedAt: "", values: value === undefined ? {} : { c1: value } }]);
+    const { container } = renderPage();
+    await screen.findByTitle("Удалить строку");
+    const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(".cell-input")!;
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+    await act(async () => {});
+    expect(rowsApi.setCell).not.toHaveBeenCalled();
+    expect(rowsApi.list).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { value: undefined, draft: "Заметка", expected: "Заметка" },
+    { value: "Заметка", draft: "", expected: null },
+    { value: "Заметка", draft: "Заметка", expected: undefined },
+  ])("saves text only when its content changes: $value → $draft", async ({ value, draft, expected }) => {
+    vi.mocked(columnsApi.list).mockResolvedValue([{ id: "c1", journalId: "j1", name: "Текст", type: "text", role: null, options: [], position: 0, createdAt: "", updatedAt: "" }]);
+    vi.mocked(rowsApi.list).mockResolvedValue([{ id: "r1", journalId: "j1", position: 0, warnings: [], createdAt: "", updatedAt: "", values: { c1: value } }]);
+    vi.mocked(rowsApi.setCell).mockResolvedValue(undefined);
+    renderPage();
+    const input = await screen.findByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: draft } });
+    fireEvent.blur(input);
+    if (expected === undefined) {
+      await act(async () => {});
+      expect(rowsApi.setCell).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(rowsApi.setCell).toHaveBeenCalledExactlyOnceWith("j1", "r1", "c1", expected));
+    }
+  });
 
   it("blocks both create buttons until the row list refresh completes", async () => {
     const request = deferred();

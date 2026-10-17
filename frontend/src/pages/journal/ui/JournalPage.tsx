@@ -589,6 +589,7 @@ function CellEditor({
       defaultValue={value == null ? "" : String(value)}
       onBlur={(e) => {
         const raw = e.target.value;
+        if (raw === (value == null ? "" : String(value))) return;
         if (raw !== "" && !e.target.checkValidity()) {
           e.target.reportValidity();
           e.target.value = value == null ? "" : String(value);
