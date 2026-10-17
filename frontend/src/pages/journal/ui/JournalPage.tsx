@@ -36,6 +36,9 @@ import { JournalAnalytics } from "@/widgets/journal-analytics";
 import { TableAppearance } from "@/widgets/table-appearance";
 import { TextCell } from "./TextCell";
 import { useCellDraft } from "./useCellDraft";
+import { ColumnResizeHandle } from "./ColumnResizeHandle";
+import { DEFAULT_COLUMN_WIDTH } from "./column-widths";
+import { useColumnWidths } from "./useColumnWidths";
 import { MobileImageViewer } from "./MobileImageViewer";
 import { Button, IconButton, StateView } from "@/shared/ui";
 
@@ -71,6 +74,7 @@ const warningLabels: Record<DataWarning, string> = {
 
 export function JournalPage() {
   const { id = "" } = useParams();
+  const columnWidths = useColumnWidths(id);
   const [view, setView] = useState<"journal" | "analytics">("journal");
   const [editing, setEditing] = useState<JournalColumn | null | undefined>(
     undefined,
@@ -288,7 +292,11 @@ export function JournalPage() {
             </span>
           </div>
           <div className="table-shell">
-            <table className="journal-table">
+            <table className="journal-table" style={{ width: 46 + columns.data.reduce((total, column) => total + (columnWidths.widths[column.id] ?? DEFAULT_COLUMN_WIDTH), 0) }}>
+              <colgroup>
+                <col style={{ width: 46 }} />
+                {columns.data.map((column) => <col key={column.id} style={{ width: columnWidths.widths[column.id] ?? DEFAULT_COLUMN_WIDTH }} />)}
+              </colgroup>
               <thead inert={move.isPending} aria-busy={move.isPending}>
                 <tr>
                   <th className="row-number">#</th>
@@ -338,6 +346,7 @@ export function JournalPage() {
                           </button>
                         </div>
                       </div>
+                      <ColumnResizeHandle name={item.name} width={columnWidths.widths[item.id] ?? DEFAULT_COLUMN_WIDTH} onResize={(width) => columnWidths.resize(item.id, width)} />
                     </th>
                   ))}
                 </tr>

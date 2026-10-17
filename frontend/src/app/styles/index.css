@@ -151,12 +151,17 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .table-toolbar .table-appearance { margin: 0; }
 .cell-save-status { align-items: center; color: var(--text-tertiary); display: inline-flex; font-size: 11px; gap: 6px; min-height: 20px; }
 .table-appearance button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.journal-table { border-collapse: separate; border-spacing: 0; min-width: 100%; table-layout: fixed; }
-.journal-table th, .journal-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); height: 52px; min-width: 205px; padding: 0; text-align: left; }
+.journal-table { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.journal-table th, .journal-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); height: 52px; padding: 0; text-align: left; }
 .journal-table th:last-child, .journal-table td:last-child { border-right: 0; }
 .journal-table tbody tr:last-child td { border-bottom: 0; }
 .journal-table thead { position: sticky; top: 0; z-index: 3; }
-.journal-table th { background: #fafafa; }
+.journal-table th { background: #fafafa; position: relative; }
+.column-resizer { bottom: 0; cursor: col-resize; position: absolute; right: 0; top: 0; touch-action: none; width: 9px; z-index: 4; }
+.column-resizer::after { background: var(--accent); bottom: 8px; content: ""; opacity: 0; position: absolute; right: 0; top: 8px; transition: opacity 120ms ease; width: 2px; }
+.column-resizer:hover::after, .column-resizer:focus-visible::after, .column-resizer[data-resizing]::after { opacity: .8; }
+.journal-table th:has(> .column-resizer:hover), .journal-table th:has(> .column-resizer[data-resizing]) { background: var(--accent-soft); }
+body.resizing-column, body.resizing-column * { cursor: col-resize !important; user-select: none !important; }
 .journal-table tbody tr { transition: background var(--transition); }
 .journal-table [aria-busy="true"] { opacity: .6; }
 .journal-table tbody tr:hover td { background: #fafcff; }
