@@ -146,12 +146,52 @@ describe("journal pending actions", () => {
     const button = target === "row" ? screen.getAllByTitle("Удалить строку")[0] : screen.getByRole("button", { name: "Удалить изображение" });
     fireEvent.click(button);
     await waitFor(() => expect(button).toBeDisabled());
-    expect(button.closest("tr")).toHaveAttribute("inert");
+    if (target === "row") expect(button.closest("tr")).toHaveAttribute("inert");
+    else expect(button.closest("tr")).not.toHaveAttribute("inert");
     expect(screen.getAllByTitle("Удалить строку")[1]).toBeEnabled();
     fireEvent.click(button);
     expect(remove).toHaveBeenCalledTimes(1);
     await act(async () => request.reject(new Error("Ошибка запроса")));
     await waitFor(() => expect(button).toBeEnabled());
     expect(button.closest("tr")).not.toHaveAttribute("inert");
+  });
+
+  it("saves different cells independently, queues saves of the same cell, and preserves unfinished input", async () => {
+    const first = deferred();
+    const second = deferred();
+    vi.mocked(columnsApi.list).mockResolvedValue(["c1", "c2"].map((id, position) => ({
+      id, journalId: "j1", name: id, type: "text", role: null, options: [], position, createdAt: "", updatedAt: "",
+    })));
+    vi.mocked(rowsApi.list).mockResolvedValue([{ id: "r1", journalId: "j1", position: 0, warnings: [], createdAt: "", updatedAt: "", values: {} }]);
+    vi.mocked(rowsApi.setCell).mockImplementation(async (_journal, _row, column, next) => {
+      if (column === "c1" && next === "Первое") await first.promise;
+      if (column === "c1" && next === "Второе") await second.promise;
+    });
+    renderPage();
+    const [a, b] = await screen.findAllByRole("textbox");
+    fireEvent.focus(a);
+    fireEvent.change(a, { target: { value: "Первое" } });
+    fireEvent.blur(a);
+    await waitFor(() => expect(rowsApi.setCell).toHaveBeenCalledTimes(1));
+    expect(a.closest("tr")).not.toHaveAttribute("inert");
+    expect(a).toBeEnabled();
+    expect(b).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Сохранение…");
+    fireEvent.focus(a);
+    fireEvent.change(a, { target: { value: "Второе" } });
+    fireEvent.blur(a);
+    fireEvent.focus(b);
+    fireEvent.change(b, { target: { value: "Другая ячейка" } });
+    fireEvent.blur(b);
+    await waitFor(() => expect(rowsApi.setCell).toHaveBeenCalledWith("j1", "r1", "c2", "Другая ячейка"));
+    expect(rowsApi.setCell).not.toHaveBeenCalledWith("j1", "r1", "c1", "Второе");
+    fireEvent.focus(a);
+    fireEvent.change(a, { target: { value: "Ещё не закончено" } });
+    await act(async () => first.resolve());
+    await waitFor(() => expect(rowsApi.setCell).toHaveBeenCalledWith("j1", "r1", "c1", "Второе"));
+    expect(a).toHaveValue("Ещё не закончено");
+    await act(async () => second.resolve());
+    await waitFor(() => expect(screen.getByRole("status")).toBeEmptyDOMElement());
+    expect(a).toHaveValue("Ещё не закончено");
   });
 });

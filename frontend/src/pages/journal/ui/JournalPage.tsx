@@ -35,6 +35,7 @@ import { errorMessage, errorRequestId } from "@/shared/api/api-error";
 import { JournalAnalytics } from "@/widgets/journal-analytics";
 import { TableAppearance } from "@/widgets/table-appearance";
 import { TextCell } from "./TextCell";
+import { useCellDraft } from "./useCellDraft";
 import { MobileImageViewer } from "./MobileImageViewer";
 import { Button, IconButton, StateView } from "@/shared/ui";
 
@@ -83,13 +84,13 @@ export function JournalPage() {
   const [comparisonImage, setComparisonImage] = useState<Attachment | null>(null);
   const [previewSize, setPreviewSize] = useState(25);
   const pendingRows = useMutationState({
-    filters: { mutationKey: ["row-write", id], status: "pending" },
+    filters: { mutationKey: ["row-delete", id], status: "pending" },
     select: (mutation) => String(mutation.options.mutationKey?.[2] ??
       (typeof mutation.state.variables === "string" ? mutation.state.variables :
         (mutation.state.variables as { rowId: string }).rowId)),
   });
-  const uploadingRows = useMutationState({
-    filters: { mutationKey: ["image-upload", id], status: "pending" },
+  const busyCellRows = useMutationState({
+    filters: { predicate: (mutation) => ["cell-save", "image-upload", "image-delete"].includes(String(mutation.options.mutationKey?.[0])) && mutation.options.mutationKey?.[1] === id, status: "pending" },
     select: (mutation) => String(mutation.options.mutationKey?.[2]),
   });
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,21 +161,8 @@ export function JournalPage() {
     onSuccess: refreshRows,
   });
   const deleteRow = useMutation({
-    mutationKey: ["row-write", id],
+    mutationKey: ["row-delete", id],
     mutationFn: (rowId: string) => rowsApi.remove(id, rowId),
-    onSuccess: refreshRows,
-  });
-  const saveCell = useMutation({
-    mutationKey: ["row-write", id],
-    mutationFn: ({
-      rowId,
-      columnId,
-      value,
-    }: {
-      rowId: string;
-      columnId: string;
-      value: unknown;
-    }) => rowsApi.setCell(id, rowId, columnId, value),
     onSuccess: refreshRows,
   });
   const saveSettings = useMutation({
@@ -293,7 +281,12 @@ export function JournalPage() {
         )}
         {view === "journal" && !!columns.data?.length && (
           <>
-          <TableAppearance wrapText={wrapText} onWrapTextChange={setWrapText} />
+          <div className="table-toolbar">
+            <TableAppearance wrapText={wrapText} onWrapTextChange={setWrapText} />
+            <span className="cell-save-status" role="status" aria-live="polite">
+              {busyCellRows.length > 0 && <><span className="ui-spinner" aria-hidden="true" /> Сохранение…</>}
+            </span>
+          </div>
           <div className="table-shell">
             <table className="journal-table">
               <thead inert={move.isPending} aria-busy={move.isPending}>
@@ -365,7 +358,7 @@ export function JournalPage() {
                       )}
                       <button
                         title="Удалить строку"
-                        disabled={pendingRows.includes(row.id) || uploadingRows.includes(row.id)}
+                        disabled={pendingRows.includes(row.id) || busyCellRows.includes(row.id)}
                         onClick={() => deleteRow.mutate(row.id)}
                       >
                         {pendingRows.includes(row.id) ? <span className="ui-spinner" /> : <Trash2 size={13} />}
@@ -383,13 +376,6 @@ export function JournalPage() {
                           onImageEnter={showHoveredImage}
                           onImageLeave={hideHoveredImage}
                           onImagePin={openImage}
-                          onSave={(value) =>
-                            saveCell.mutate({
-                              rowId: row.id,
-                              columnId: item.id,
-                              value,
-                            })
-                          }
                         />
                       </td>
                     ))}
@@ -512,7 +498,6 @@ function CellEditor({
   column,
   wrapText,
   value,
-  onSave,
   onRefresh,
   onImageEnter,
   onImageLeave,
@@ -523,12 +508,26 @@ function CellEditor({
   column: JournalColumn;
   wrapText: boolean;
   value: unknown;
-  onSave: (value: unknown) => void;
   onRefresh: () => Promise<unknown>;
   onImageEnter: (image: Attachment) => void;
   onImageLeave: () => void;
   onImagePin: (image: Attachment) => void;
 }) {
+  const mutationKey = ["cell-save", journalId, rowId, column.id];
+  const save = useMutation({
+    mutationKey,
+    scope: { id: JSON.stringify(mutationKey) },
+    mutationFn: (next: unknown) => rowsApi.setCell(journalId, rowId, column.id, next),
+    onSuccess: onRefresh,
+  });
+  const pendingValues = useMutationState({
+    filters: { mutationKey, status: "pending", exact: true },
+    select: (mutation) => mutation.state.variables,
+  });
+  const saving = pendingValues.length > 0;
+  const displayedValue = saving ? pendingValues[pendingValues.length - 1] : value;
+  const onSave = (next: unknown) => save.mutate(next);
+  const cell = useCellDraft(displayedValue, saving, save.isError);
   const valueTone = column.role === "trade_result" && typeof value === "string"
     ? ` result-${value.toLowerCase()}`
     : (column.role === "pnl" && typeof value === "number")
@@ -538,8 +537,12 @@ function CellEditor({
     return (
       <select
         className={`cell-input${valueTone}`}
-        value={typeof value === "string" ? value : ""}
-        onChange={(e) => onSave(e.target.value || null)}
+        value={cell.draft}
+        onChange={(e) => {
+          const raw = e.target.value;
+          cell.change(raw);
+          cell.commit(raw, () => onSave(raw || null));
+        }}
       >
         {column.role === "trade_result" ? (
           <option value="" disabled hidden>Выберите результат</option>
@@ -556,8 +559,12 @@ function CellEditor({
       <label className="cell-checkbox">
         <input
           type="checkbox"
-          checked={value === true}
-          onChange={(e) => onSave(e.target.checked)}
+          checked={cell.draft === "true"}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            cell.change(String(checked));
+            cell.commit(String(checked), () => onSave(checked));
+          }}
         />
       </label>
     );
@@ -575,7 +582,7 @@ function CellEditor({
       />
     );
   if (column.type === "text")
-    return <TextCell value={value} wrapText={wrapText} onSave={onSave} />;
+    return <TextCell value={displayedValue} wrapText={wrapText} onSave={onSave} saving={saving} failed={save.isError} />;
   const type =
     column.type === "number"
       ? "number"
@@ -584,24 +591,24 @@ function CellEditor({
         : "text";
   const input = (
     <input
-      key={String(value)}
       className={`cell-input${valueTone}`}
       type={type}
       min={column.role === "risk" || column.role === "r" ? 0.01 : undefined}
       max={column.role === "risk" ? 100 : undefined}
       step={column.type === "number" ? "any" : undefined}
-      defaultValue={value == null ? "" : String(value)}
+      value={cell.draft}
+      onChange={(e) => cell.change(e.target.value)}
+      onFocus={cell.focus}
       onBlur={(e) => {
         const raw = e.target.value;
-        if (raw === (value == null ? "" : String(value))) return;
         if (raw !== "" && !e.target.checkValidity()) {
           e.target.reportValidity();
-          e.target.value = value == null ? "" : String(value);
+          cell.change(value == null ? "" : String(value));
           return;
         }
         const next =
           raw === "" ? null : column.type === "number" ? Number(raw) : raw;
-        if (next !== value) onSave(next);
+        cell.commit(raw, () => { if (next !== (value ?? null) || saving) onSave(next); });
       }}
     />
   );
@@ -646,13 +653,14 @@ function ImageCell({
   });
   const uploading = useIsMutating({ mutationKey: ["image-upload", journalId, rowId, columnId] }) > 0;
   const remove = useMutation({
-    mutationKey: ["row-write", journalId, rowId],
+    mutationKey: ["image-delete", journalId, rowId, columnId],
     mutationFn: () => attachmentsApi.remove(journalId, rowId, columnId),
     onSuccess: onRefresh,
   });
+  const deleting = useIsMutating({ mutationKey: ["image-delete", journalId, rowId, columnId] }) > 0;
   if (current)
     return (
-      <div className="image-cell" aria-busy={remove.isPending}>
+      <div className="image-cell">
         <button
           className="image-thumbnail"
           type="button"
@@ -675,8 +683,8 @@ function ImageCell({
         >
           <ExternalLink size={14} />
         </a>
-        <button aria-label="Удалить изображение" title={remove.isPending ? "Удаление…" : "Удалить"} disabled={remove.isPending} onClick={() => remove.mutate()}>
-          {remove.isPending ? <span className="ui-spinner" /> : <X size={14} />}
+        <button aria-label="Удалить изображение" title={deleting ? "Удаление…" : "Удалить"} disabled={deleting} onClick={() => remove.mutate()}>
+          <X size={14} />
         </button>
       </div>
     );
@@ -702,12 +710,12 @@ function ImageCell({
     );
   return (
     <label className="image-upload" aria-busy={uploading}>
-      {uploading ? <span className="ui-spinner" /> : <ImagePlus size={15} />}
+      <ImagePlus size={15} />
       <span>{uploading ? "Загрузка…" : "Добавить"}</span>
       <input
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        disabled={uploading}
+        disabled={uploading || deleting}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) {

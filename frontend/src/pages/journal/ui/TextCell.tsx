@@ -1,12 +1,16 @@
 import { useLayoutEffect, useRef } from "react";
+import { useCellDraft } from "./useCellDraft";
 
 type TextCellProps = {
   value: unknown;
   wrapText: boolean;
   onSave: (value: string | null) => void;
+  saving?: boolean;
+  failed?: boolean;
 };
 
-export function TextCell({ value, wrapText, onSave }: TextCellProps) {
+export function TextCell({ value, wrapText, onSave, saving = false, failed = false }: TextCellProps) {
+  const cell = useCellDraft(value, saving, failed);
   const ref = useRef<HTMLTextAreaElement>(null);
   const resize = () => {
     const element = ref.current;
@@ -33,21 +37,21 @@ export function TextCell({ value, wrapText, onSave }: TextCellProps) {
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [wrapText, value]);
+  }, [wrapText, cell.draft]);
 
   return (
     <textarea
       ref={ref}
-      key={String(value)}
       className="cell-input text-cell"
       rows={1}
       wrap={wrapText ? "soft" : "off"}
-      defaultValue={value == null ? "" : String(value)}
+      value={cell.draft}
+      onChange={(event) => cell.change(event.target.value)}
+      onFocus={cell.focus}
       onInput={resize}
       onBlur={(event) => {
         const raw = event.target.value;
-        const initial = value == null ? "" : String(value);
-        if (raw !== initial) onSave(raw || null);
+        cell.commit(raw, () => onSave(raw || null));
       }}
     />
   );

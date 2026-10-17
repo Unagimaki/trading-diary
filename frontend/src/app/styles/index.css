@@ -147,6 +147,9 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .journal-empty { margin: 22px auto 0; max-width: 1480px; }
 .table-shell { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin: 0 auto; max-width: 1480px; min-height: 360px; overflow: auto; }
 .table-appearance { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 auto 12px; max-width: 1480px; }
+.table-toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 auto 12px; max-width: 1480px; }
+.table-toolbar .table-appearance { margin: 0; }
+.cell-save-status { align-items: center; color: var(--text-tertiary); display: inline-flex; font-size: 11px; gap: 6px; min-height: 20px; }
 .table-appearance button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .journal-table { border-collapse: separate; border-spacing: 0; min-width: 100%; table-layout: fixed; }
 .journal-table th, .journal-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); height: 52px; min-width: 205px; padding: 0; text-align: left; }
