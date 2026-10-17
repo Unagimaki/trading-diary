@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://trading-diary-production.up.railway.app/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
