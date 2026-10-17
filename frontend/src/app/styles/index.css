@@ -204,15 +204,16 @@ select.cell-input { cursor: pointer; padding-right: 30px; }
 .image-thumbnail { background: transparent; border: 0; border-radius: 5px; flex: 0 0 52px; height: 40px !important; overflow: hidden; padding: 0 !important; width: 52px !important; }
 .image-thumbnail img { border: 1px solid var(--border); border-radius: 5px; display: block; height: 40px; object-fit: cover; transition: border-color var(--transition), transform var(--transition); width: 52px; }
 .image-thumbnail:hover img { border-color: var(--accent); transform: scale(1.02); }
-.image-cell span { flex: 1; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.image-cell-name { flex: 1 1 0; font-size: 10px; max-width: 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .image-cell a, .image-cell > button { align-items: center; background: transparent; border: 0; border-radius: 4px; color: var(--text-tertiary); cursor: pointer; display: flex; height: 27px; justify-content: center; padding: 0; width: 24px; }
+.image-cell a, .image-cell > button:not(.image-thumbnail) { flex: 0 0 24px; }
 .image-cell a:hover { background: var(--surface-hover); color: var(--text); }
 .image-cell > button:hover { background: var(--danger-soft); color: var(--danger); }
 .image-preview-dock { align-items: flex-start; display: flex; gap: 10px; max-width: calc(100vw - 48px); pointer-events: none; position: fixed; right: 24px; top: 74px; z-index: 20; }
 .image-preview { animation: dialog-in var(--transition); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); display: grid; flex: 0 0 auto; max-height: calc(100vh - 98px); overflow: hidden; pointer-events: none; position: relative; }
 .image-preview-dock.comparing .image-preview { max-width: calc((100vw - 58px) / 2); }
 .image-preview img { background: #f2f2f3; display: block; max-height: calc(100vh - 134px); object-fit: contain; width: 100%; }
-.image-preview-caption { background: var(--surface); border-top: 1px solid var(--border); font-size: 10px; overflow: hidden; padding: 9px 10px; text-overflow: ellipsis; white-space: nowrap; }
+.image-preview-caption { background: var(--surface); border-top: 1px solid var(--border); font-size: 10px; overflow-wrap: anywhere; padding: 9px 10px; }
 .image-preview-caption span { color: var(--text-tertiary); font-size: 8px; font-weight: 700; margin-right: 8px; text-transform: uppercase; }
 .image-preview-controls { display: flex; gap: 4px; pointer-events: auto; position: absolute; right: 8px; top: 8px; }
 .image-preview-controls button { align-items: center; background: rgba(255,255,255,.96); border: 1px solid var(--border-strong); border-radius: 5px; color: var(--text-secondary); cursor: pointer; display: flex; height: 30px; justify-content: center; padding: 0; width: 30px; }
@@ -320,7 +321,7 @@ select.cell-input { cursor: pointer; padding-right: 30px; }
 .mobile-image-panels.comparing { grid-template-rows: repeat(2, minmax(0, 1fr)); }
 .mobile-image-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .mobile-image-panel-tools { align-items: center; display: flex; gap: 4px; padding: 0 8px; }
-.mobile-image-panel-tools > span { flex: 1; font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-image-panel-tools > span { flex: 1; font-size: 11px; min-width: 0; overflow-wrap: anywhere; }
 .mobile-image-scroll { background: #18191c; flex: 1; min-height: 0; overflow: auto; touch-action: pan-x pan-y; }
 .mobile-image-canvas { min-height: 100%; min-width: 100%; }
 .mobile-image-canvas img { display: block; height: 100%; object-fit: contain; width: 100%; }

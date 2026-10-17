@@ -661,7 +661,7 @@ function ImageCell({
         >
           <img src={attachmentsApi.contentUrl(current.id)} alt="" />
         </button>
-        <span title={current.name}>{current.name}</span>
+        <span className="image-cell-name" title={current.name}>{current.name}</span>
         <a
           href={attachmentsApi.contentUrl(current.id)}
           target="_blank"
