@@ -39,6 +39,8 @@ import { useCellDraft } from "./useCellDraft";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { DEFAULT_COLUMN_WIDTH } from "./column-widths";
 import { useColumnWidths } from "./useColumnWidths";
+import { authApi } from "@/entities/user/api/auth";
+import { rememberJournal } from "@/entities/journal/model/last-journal";
 import { MobileImageViewer } from "./MobileImageViewer";
 import { Button, IconButton, StateView } from "@/shared/ui";
 
@@ -103,6 +105,10 @@ export function JournalPage() {
     queryFn: () => journalsApi.get(id),
     retry: false,
   });
+  const currentUser = useQuery({ queryKey: ["current-user"], queryFn: authApi.me, retry: false, enabled: journal.isSuccess });
+  useEffect(() => {
+    if (journal.isSuccess && currentUser.data) rememberJournal(currentUser.data.id, id);
+  }, [journal.isSuccess, currentUser.data, id]);
   const columns = useQuery({
     queryKey: ["columns", id],
     queryFn: () => columnsApi.list(id),
@@ -220,7 +226,7 @@ export function JournalPage() {
       <header className="topbar">
         <Link className="back-link" to="/">
           <ArrowLeft size={17} />
-          Журналы
+          Главная
         </Link>
         <div className="brand"><span className="brand-mark">TD</span><span>Trade Diary</span></div>
         <span />

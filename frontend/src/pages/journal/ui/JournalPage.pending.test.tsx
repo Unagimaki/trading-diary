@@ -11,6 +11,7 @@ import { JournalPage } from "./JournalPage";
 vi.mock("@/entities/journal/api/journals", () => ({ journalsApi: {
   get: vi.fn().mockResolvedValue({ id: "j1", name: "Журнал" }),
 } }));
+vi.mock("@/entities/user/api/auth", () => ({ authApi: { me: vi.fn().mockResolvedValue({ id: "u1", name: "Пользователь" }) } }));
 vi.mock("@/entities/column/api/columns", () => ({ columnsApi: {
   list: vi.fn().mockResolvedValue([{ id: "c1", name: "Скриншот", type: "image", role: null, options: [] }]),
 } }));
